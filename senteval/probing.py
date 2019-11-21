@@ -38,12 +38,16 @@ class PROBINGEval(object):
                   self.task_data['test']['X']
         return prepare(params, samples)
 
+        # load data to self.task_data
+        # self.task_data = prepare(params)
+
     def loadFile(self, fpath):
         self.tok2split = {'tr': 'train', 'va': 'dev', 'te': 'test'}
         with io.open(fpath, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.rstrip().split('\t')
-                self.task_data[self.tok2split[line[0]]]['X'].append(line[-1].split())
+                # self.task_data[self.tok2split[line[0]]]['X'].append(line[-1].split())
+                self.task_data[self.tok2split[line[0]]]['X'].append(line[-1])
                 self.task_data[self.tok2split[line[0]]]['y'].append(line[1])
 
         labels = sorted(np.unique(self.task_data['train']['y']))

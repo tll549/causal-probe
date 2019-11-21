@@ -25,6 +25,10 @@ import senteval
 from reference.encoder import Encoder
 from utils import dotdict
 
+import torch
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
 def get_args():
     '''https://github.com/lingyugao/causal/blob/master/main.py#L101'''
     parser = argparse.ArgumentParser(description='BECauSe')
@@ -85,11 +89,19 @@ def prepare(params, samples):
     sees the whole dataset of each task and can thus construct the word vocabulary, 
     the dictionary of word vectors etc
 
-    samples = self.task_data['train']['X'] + self.task_data['dev']['X'] + \
-                  self.task_data['test']['X']
+    batcher only sees one batch at a time while the samples argument of prepare contains 
+        all the sentences of a task.
 
-    modified (add, as below):
-        params.word2id, params.word_vec, wvec_dim
+    params: senteval parameters.
+    samples: list of all sentences from the tranfer task.
+    output: No output. Arguments stored in "params" can further be used by batcher.
+
+    Example: in bow.py, prepare is is used to build the vocabulary of words and construct 
+        the "params.word_vect* dictionary of word vectors.
+        samples = self.task_data['train']['X'] + self.task_data['dev']['X'] + \
+                      self.task_data['test']['X']
+        modified (add, as below):
+            params.word2id, params.word_vec, wvec_dim
     '''
     # print(len(samples), samples[0])
     # print(params.keys())
@@ -142,39 +154,75 @@ def prepare(params, samples):
     '''
     prepare the encoder (BERT) given pars
     will be used in batcher to encode and compute sentence embeddings
+    no need samples here
     '''
-    print(params)
+    print("\nprepare\n")
+    # print(params.keys())
     pretrained = dotdict(params.pretrained) # acess diction using dot
+
     # self.method = pretrained.method
     params.encoder = Encoder(pretrained.model, pretrained.model_type,
-                           pretrained.cased, pretrained.fine_tune).to(device)
-    self.loadfile(self.data_path)
-    logging.info('Loaded %s train - %s dev - %s test for %s' %
-                 (len(self.task_data['train']['y']), len(self.task_data['dev']['y']),
-                  len(self.task_data['test']['y']), self.task))
+        pretrained.cased, pretrained.fine_tune).to(device)
+    # self.loadfile(self.data_path)
+    # logging.info('Loaded %s train - %s dev - %s test for %s' %
+    #              (len(self.task_data['train']['y']), len(self.task_data['dev']['y']),
+    #               len(self.task_data['test']['y']), self.task))
+    # print(params.keys())
     return
 
 def batcher(params, batch):
-    print(len(batch)) # 128
-    print(batch[0]) # ['A', 'very', 'bad', 'idea', '.']
-    batch = [sent if sent != [] else ['.'] for sent in batch]
-    print(batch[0])
+    '''
+    transforms a batch of text sentences into sentence embeddings
+
+    params: senteval parameters.
+    batch: numpy array of text sentences (of size params.batch_size)
+    output: numpy array of sentence embeddings (of size params.batch_size)
+    Example: in bow.py, batcher is used to compute the mean of the word vectors for each 
+        sentence in the batch using params.word_vec. Use your own encoder in that function 
+        to encode sentences.
+    '''
+    # print("\nbatcher\n")
+    # print(len(batch)) # 128
+    # batch = [sent if sent != [] else ['.'] for sent in batch]
+    # print(batch[0]) # ['A', 'very', 'bad', 'idea', '.']
+
+    # embeddings = []
+    # for sent in batch:
+    #     sentvec = []
+    #     for word in sent:
+    #         if word in params.word_vec:
+    #             sentvec.append(params.word_vec[word])
+    #     if not sentvec:
+    #         vec = np.zeros(params.wvec_dim)
+    #         sentvec.append(vec)
+    #     sentvec = np.mean(sentvec, 0)
+    #     embeddings.append(sentvec)
+    # embeddings = np.vstack(embeddings)
+    # print(embeddings.shape) # (params.batch_size, wvec_dim) = (128, 300)
+
+    encoder = params.encoder
+
     embeddings = []
-
-    for sent in batch:
-        sentvec = []
-        for word in sent:
-            if word in params.word_vec:
-                sentvec.append(params.word_vec[word])
-        if not sentvec:
-            vec = np.zeros(params.wvec_dim)
-            sentvec.append(vec)
-        sentvec = np.mean(sentvec, 0)
-        embeddings.append(sentvec)
-
+    with torch.no_grad():
+        # batch = ['[CLS] is this jacksonville? [SEP]', 
+        #     '[CLS] this is some sentence, long long long sentence not short balf blad sdlf dsdk dkfs dsk. [SEP]']
+        for sentence in batch: # for each sentence
+            # tokenize, get id, convert to tensor, put to cuda
+            tokens_tensor = encoder.tokenize_sentence(sentence, 
+                get_subword_indices=False, force_split=False).to(device) # tokenize here return indices, not only tokenize words
+            # print(sentence, 'length', tokens_tensor.shape)
+            outputs = encoder(tokens_tensor)
+            encoded_layers = outputs[0]
+            # print(encoded_layers.shape) # (batch_size, seq_len, hidden_size) = (1, 7, 768)
+            # print(torch.mean(encoded_layers, dim=1).shape) # (batch_size, hidden_size) = (1, 768)
+            # print(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).shape) # (hidden_size) = (768)
+            # print()
+            embeddings.append(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).cpu()) 
+            # break
     embeddings = np.vstack(embeddings)
-    return 
-    # return embeddings
+    # print(embeddings.shape) # (params.batch_size, ) = (128, 300)
+    # return 
+    return embeddings
 
     
 # Set params for SentEval
@@ -208,7 +256,7 @@ if __name__ == '__main__':
     se = senteval.engine.SE(params_senteval, batcher, prepare)
     transfer_tasks = ['Length']
     results = se.eval(transfer_tasks)
-    print(results)
+    # print(results)
 
     # se = senteval.engine.SE(params_senteval, batcher)
     # transfer_tasks = 'SimpelCausal'
