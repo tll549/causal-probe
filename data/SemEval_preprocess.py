@@ -9,7 +9,7 @@ def get_args():
         default='data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT',
         help='raw data path to SemEval')
     parser.add_argument('-save_data_path', type=str, 
-        default='data/causal_probing/SemEval_2010_8/raw/SemEval_processed.txt',
+        default='data/causal_probing/SemEval_2010_8/processed/SemEval_processed.txt',
         help='raw data path to SemEval')
     return parser.parse_args()
 
@@ -56,16 +56,25 @@ class DataLoader(object):
         logging.info(f'data splitted train: {len(self.train_idx)}, dev: {len(self.dev_idx)}, test: {len(self.test_idx)}')
         assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
 
-    # def write(self):
+    def write(self, data_path):
+        with open(data_path, 'w+') as f:
+            for i in self.train_idx:
+                f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+            for i in self.dev_idx:
+                f.write(f'va\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+            for i in self.test_idx:
+                f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+        logging.info(f'data wrote')
 
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
 if __name__ == '__main__':
     args = get_args()
-    print(args)
+    # print(args)
 
     dl = DataLoader()
     dl.read(args.raw_data_path)
     dl.preprocess()
     dl.split()
+    dl.write(args.save_data_path)

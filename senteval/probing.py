@@ -103,6 +103,7 @@ class PROBINGEval(object):
                 batch = self.task_data[key]['X'][ii:ii + bsize]
                 embeddings = batcher(params, batch)
                 task_embed[key]['X'].append(embeddings)
+                # break
             task_embed[key]['X'] = np.vstack(task_embed[key]['X'])
             task_embed[key]['y'] = np.array(self.task_data[key]['y'])
         logging.info('Computed embeddings')
@@ -212,6 +213,6 @@ Causal Relations
 
 class SimpelCausalEval(PROBINGEval):
     def __init__(self, task_path, seed=1111):
-        task_path = os.path.join(task_path, 'sentence_length.txt')
-        # labels: bins
+        task_path = os.path.join(task_path, 'SemEval_2010_8/processed/SemEval_processed.txt')
+        # labels: causal relation exist or not
         PROBINGEval.__init__(self, 'SimpelCausal', task_path, seed)

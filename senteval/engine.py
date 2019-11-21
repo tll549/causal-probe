@@ -51,7 +51,8 @@ class SE(object):
                            'STS14', 'STS15', 'STS16',
                            'Length', 'WordContent', 'Depth', 'TopConstituents',
                            'BigramShift', 'Tense', 'SubjNumber', 'ObjNumber',
-                           'OddManOut', 'CoordinationInversion']
+                           'OddManOut', 'CoordinationInversion',
+                           'SimpelCausal']
 
     def eval(self, name):
         # evaluate on evaluation [name], either takes string or list of strings
@@ -117,7 +118,7 @@ class SE(object):
 
         # my own
         elif name == 'SimpelCausal':
-                self.evaluation = SimpelCausalEval(tpath + '/probing', seed=self.params.seed)
+                self.evaluation = SimpelCausalEval(tpath + '/causal_probing', seed=self.params.seed)
 
         self.params.current_task = name
         self.evaluation.do_prepare(self.params, self.prepare)

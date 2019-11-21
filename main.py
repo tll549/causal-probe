@@ -31,13 +31,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def get_args():
     '''https://github.com/lingyugao/causal/blob/master/main.py#L101'''
-    parser = argparse.ArgumentParser(description='BECauSe')
+    parser = argparse.ArgumentParser(description='')
 
     # global path parameters
     parser.add_argument('-data_path', type=str, default='data',
                         help='path to datasets (default: ~/data/origin/BECAUSE-master)/')
-    parser.add_argument('-output_path', type=str, default='~/output/causal/BECAUSE-master/',
-                        help='path to output results (default: ~/output/causal/BECAUSE-master/)')
+    parser.add_argument('-output_path', type=str, default='',
+                        help='path to output results')
     parser.add_argument('-seed', type=int, default=0,
                         help='Random seed (default: 0)')
 
@@ -156,7 +156,7 @@ def prepare(params, samples):
     will be used in batcher to encode and compute sentence embeddings
     no need samples here
     '''
-    print("\nprepare\n")
+    # print("\nprepare\n")
     # print(params.keys())
     pretrained = dotdict(params.pretrained) # acess diction using dot
 
@@ -168,6 +168,8 @@ def prepare(params, samples):
     #              (len(self.task_data['train']['y']), len(self.task_data['dev']['y']),
     #               len(self.task_data['test']['y']), self.task))
     # print(params.keys())
+
+    logging.info('prepared')
     return
 
 def batcher(params, batch):
@@ -217,7 +219,7 @@ def batcher(params, batch):
             # print(torch.mean(encoded_layers, dim=1).shape) # (batch_size, hidden_size) = (1, 768)
             # print(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).shape) # (hidden_size) = (768)
             # print()
-            embeddings.append(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).cpu()) 
+            embeddings.append(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).cpu()) # TODO
             # break
     embeddings = np.vstack(embeddings)
     # print(embeddings.shape) # (params.batch_size, ) = (128, 300)
@@ -254,11 +256,7 @@ if __name__ == '__main__':
                            }
 
     se = senteval.engine.SE(params_senteval, batcher, prepare)
-    transfer_tasks = ['Length']
+    # transfer_tasks = ['Length']
+    transfer_tasks = 'SimpelCausal'
     results = se.eval(transfer_tasks)
-    # print(results)
-
-    # se = senteval.engine.SE(params_senteval, batcher)
-    # transfer_tasks = 'SimpelCausal'
-    # results = se.eval(transfer_tasks)
     # print(results)
