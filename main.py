@@ -14,20 +14,21 @@ import logging
 import argparse
 
 # Set PATHs
-PATH_TO_SENTEVAL = '.'
-PATH_TO_DATA = 'data'
+# PATH_TO_SENTEVAL = '.'
+# PATH_TO_DATA = 'data'
 PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
 # import SentEval
-sys.path.insert(0, PATH_TO_SENTEVAL)
+# sys.path.insert(0, PATH_TO_SENTEVAL)
 import senteval
 
-from reference.encoder import Encoder
+# from reference.encoder import Encoder
 from utils import dotdict
 
 import torch
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+from transformers import BertTokenizer, BertModel
 
 def get_args():
     '''https://github.com/lingyugao/causal/blob/master/main.py#L101'''
@@ -35,15 +36,17 @@ def get_args():
 
     # global path parameters
     parser.add_argument('-data_path', type=str, default='data',
-                        help='path to datasets (default: ~/data/origin/BECAUSE-master)/')
+                        help='path to datasets')
     parser.add_argument('-output_path', type=str, default='',
                         help='path to output results')
     parser.add_argument('-seed', type=int, default=0,
                         help='Random seed (default: 0)')
 
     # model settings
-    parser.add_argument('-model', type=str, default='bert', choices=['bert', 'spanbert', 'roberta', 'xlnet', 'gpt2'],
-                        help='choose model(bert, spanbert, roberta, gpt2)')
+    parser.add_argument('-model', type=str, default='bert', 
+        # choices=['bert', 'spanbert', 'roberta', 'xlnet', 'gpt2', 'glove'],
+        choices=['bert', 'glove'],
+        help='choose model(bert, spanbert, roberta, gpt2)')
     parser.add_argument('-model_type', type=str, default='base',
                         choices=['base', 'large', 'small', 'medium', 'large'],
                         help='bert/gpt2 model size')
@@ -103,71 +106,69 @@ def prepare(params, samples):
         modified (add, as below):
             params.word2id, params.word_vec, wvec_dim
     '''
-    # print(len(samples), samples[0])
-    # print(params.keys())
-    # # Create dictionary
-    # def create_dictionary(sentences, threshold=0):
-    #     words = {}
-    #     for s in sentences:
-    #         for word in s:
-    #             words[word] = words.get(word, 0) + 1
-
-    #     if threshold > 0:
-    #         newwords = {}
-    #         for word in words:
-    #             if words[word] >= threshold:
-    #                 newwords[word] = words[word]
-    #         words = newwords
-    #     words['<s>'] = 1e9 + 4
-    #     words['</s>'] = 1e9 + 3
-    #     words['<p>'] = 1e9 + 2
-
-    #     sorted_words = sorted(words.items(), key=lambda x: -x[1])  # inverse sort
-    #     id2word = []
-    #     word2id = {}
-    #     for i, (w, _) in enumerate(sorted_words):
-    #         id2word.append(w)
-    #         word2id[w] = i
-
-    #     return id2word, word2id
-    # _, params.word2id = create_dictionary(samples)
-    # # Get word vectors from vocabulary (glove, word2vec, fasttext ..)
-    # def get_wordvec(path_to_vec, word2id):
-    #     word_vec = {}
-
-    #     with io.open(path_to_vec, 'r', encoding='utf-8') as f:
-    #         # if word2vec or fasttext file : skip first line "next(f)"
-    #         for line in f:
-    #             word, vec = line.split(' ', 1)
-    #             if word in word2id:
-    #                 word_vec[word] = np.fromstring(vec, sep=' ')
-
-    #     logging.info('Found {0} words with word vectors, out of \
-    #         {1} words'.format(len(word_vec), len(word2id)))
-    #     return word_vec
-    # params.word_vec = get_wordvec(PATH_TO_VEC, params.word2id)
-    # params.wvec_dim = 300
-    # print(params.keys())
-    # print(params.word2id['random']) # 4158
-    # print(len(params.word_vec['random'])) # 300
 
     '''
     prepare the encoder (BERT) given pars
     will be used in batcher to encode and compute sentence embeddings
     no need samples here
     '''
-    # print("\nprepare\n")
-    # print(params.keys())
-    pretrained = dotdict(params.pretrained) # acess diction using dot
+    logging.info('preparing...')
 
-    # self.method = pretrained.method
-    params.encoder = Encoder(pretrained.model, pretrained.model_type,
-        pretrained.cased, pretrained.fine_tune).to(device)
-    # self.loadfile(self.data_path)
-    # logging.info('Loaded %s train - %s dev - %s test for %s' %
-    #              (len(self.task_data['train']['y']), len(self.task_data['dev']['y']),
-    #               len(self.task_data['test']['y']), self.task))
-    # print(params.keys())
+    params.pretrained = dotdict(params.pretrained)
+    if params.pretrained.model == 'bert':
+        bert_type = f'bert-{params.pretrained.model_type}-{"cased" if params.pretrained.cased else "uncased"}'
+        params.tokenizer = BertTokenizer.from_pretrained(bert_type)
+        params.encoder = BertModel.from_pretrained(bert_type).to(device)
+        params.encoder.eval() # ??
+
+    elif params.pretrained.model == 'glove':
+        # print(len(samples), samples[0])
+        samples = [s.split() for s in samples]
+        # Create dictionary
+        def create_dictionary(sentences, threshold=0):
+            words = {}
+            for s in sentences:
+                for word in s:
+                    words[word] = words.get(word, 0) + 1
+
+            if threshold > 0:
+                newwords = {}
+                for word in words:
+                    if words[word] >= threshold:
+                        newwords[word] = words[word]
+                words = newwords
+            words['<s>'] = 1e9 + 4
+            words['</s>'] = 1e9 + 3
+            words['<p>'] = 1e9 + 2
+
+            sorted_words = sorted(words.items(), key=lambda x: -x[1])  # inverse sort
+            id2word = []
+            word2id = {}
+            for i, (w, _) in enumerate(sorted_words):
+                id2word.append(w)
+                word2id[w] = i
+
+            return id2word, word2id
+        _, params.word2id = create_dictionary(samples)
+        # Get word vectors from vocabulary (glove, word2vec, fasttext ..)
+        def get_wordvec(path_to_vec, word2id):
+            word_vec = {}
+
+            with io.open(path_to_vec, 'r', encoding='utf-8') as f:
+                # if word2vec or fasttext file : skip first line "next(f)"
+                for line in f:
+                    word, vec = line.split(' ', 1)
+                    if word in word2id:
+                        word_vec[word] = np.fromstring(vec, sep=' ')
+
+            logging.info('Found {0} words with word vectors, out of \
+                {1} words'.format(len(word_vec), len(word2id)))
+            return word_vec
+        params.word_vec = get_wordvec(PATH_TO_VEC, params.word2id)
+        params.wvec_dim = 300
+        # print(params.word2id['book']) # 4158
+        # print(len(params.word_vec['book'])) # 300
+        # print(params.word_vec['book']) # 
 
     logging.info('prepared')
     return
@@ -184,56 +185,55 @@ def batcher(params, batch):
         to encode sentences.
     '''
     # print("\nbatcher\n")
-    # print(len(batch)) # 128
-    # batch = [sent if sent != [] else ['.'] for sent in batch]
-    # print(batch[0]) # ['A', 'very', 'bad', 'idea', '.']
 
-    # embeddings = []
-    # for sent in batch:
-    #     sentvec = []
-    #     for word in sent:
-    #         if word in params.word_vec:
-    #             sentvec.append(params.word_vec[word])
-    #     if not sentvec:
-    #         vec = np.zeros(params.wvec_dim)
-    #         sentvec.append(vec)
-    #     sentvec = np.mean(sentvec, 0)
-    #     embeddings.append(sentvec)
-    # embeddings = np.vstack(embeddings)
-    # print(embeddings.shape) # (params.batch_size, wvec_dim) = (128, 300)
+    if params.pretrained.model == 'bert':
+        tokenizer = params.tokenizer
+        encoder = params.encoder
+        hidden_size = encoder.config.hidden_size
 
-    encoder = params.encoder
+        embeddings = torch.zeros(len(batch), hidden_size).to(device)
+        with torch.no_grad():
+            for i in range(len(batch)): # for each sentence
+                sentence = batch[i]
+                # sentence = '[CLS] Jim Henson was a puppeteer? [SEP]'
+                # print(sentence)
+                tokenized_text = tokenizer.tokenize(sentence)
+                # print(tokenized_text) # ['[CLS]', 'jim', 'henson', 'was', 'a', 'puppet', '##eer', '?', '[SEP]']
+                tokens_tensor = torch.tensor([tokenizer.convert_tokens_to_ids(tokenized_text)]).to(device)
+                # print(tokens_tensor) # tensor([[  101,  3958, 27227,  2001,  1037, 13997, 11510,  1029,   102]])
 
-    embeddings = []
-    with torch.no_grad():
-        # batch = ['[CLS] is this jacksonville? [SEP]', 
-        #     '[CLS] this is some sentence, long long long sentence not short balf blad sdlf dsdk dkfs dsk. [SEP]']
-        for sentence in batch: # for each sentence
-            # tokenize, get id, convert to tensor, put to cuda
-            tokens_tensor = encoder.tokenize_sentence(sentence, 
-                get_subword_indices=False, force_split=False).to(device) # tokenize here return indices, not only tokenize words
-            # print(sentence, 'length', tokens_tensor.shape)
-            outputs = encoder(tokens_tensor)
-            encoded_layers = outputs[0]
-            # print(encoded_layers.shape) # (batch_size, seq_len, hidden_size) = (1, 7, 768)
-            # print(torch.mean(encoded_layers, dim=1).shape) # (batch_size, hidden_size) = (1, 768)
-            # print(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).shape) # (hidden_size) = (768)
-            # print()
-            embeddings.append(torch.mean(encoded_layers, dim=1).view(-1, encoder.hidden_size).cpu()) # TODO
-            # break
-    embeddings = np.vstack(embeddings)
-    # print(embeddings.shape) # (params.batch_size, ) = (128, 300)
-    # return 
-    return embeddings
+                outputs = encoder(tokens_tensor)
+                encoded_layers = outputs[0]
+                # print(torch.mean(encoded_layers, dim=1).shape) # (batch_size, hidden_size) = (1, 768)
+                embeddings[i, :] = torch.mean(encoded_layers, dim=1)
+        # print(embeddings.shape) # (params.batch_size, ) = (128, 768)
+        # return 
+        return embeddings.cpu()
 
-    
-# Set params for SentEval
-# params_senteval = {'task_path': PATH_TO_DATA, 'usepytorch': True, 'kfold': 5}
-# params_senteval['classifier'] = {'nhid': 0, 'optim': 'rmsprop', 'batch_size': 128,
-#                                  'tenacity': 3, 'epoch_size': 2}
+    elif params.pretrained.model == 'glove':
+        embeddings = []
+        for sent in batch:
+            sentvec = []
+            for word in sent:
+                if word in params.word_vec:
+                    sentvec.append(params.word_vec[word])
+            if not sentvec:
+                vec = np.zeros(params.wvec_dim)
+                sentvec.append(vec)
+            sentvec = np.mean(sentvec, 0)
+            embeddings.append(sentvec)
+
+        embeddings = np.vstack(embeddings)
+        # print(embeddings.shape) # (128, 300)
+        # print(embeddings)
+        return embeddings
+
 
 # Set up logger
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
+# logging.basicConfig(filename=log_file, filemode=file_mode_dict[args.rerun],
+#                             level=logging.INFO, format='%(asctime)s %(message)s',
+#                             datefmt='%m-%d %H:%M')
 
 if __name__ == '__main__':
     args = get_args()
@@ -245,6 +245,9 @@ if __name__ == '__main__':
                            'rerun': args.rerun,
                            'reset_data': args.reset_data,
                            'batch_size': args.batch_size,
+
+                        # 'usepytorch': True, 'kfold': 5, # from example
+
                            'pretrained': {'model': args.model,
                                           'model_type': args.model_type,
                                           'cased': args.cased,
@@ -259,4 +262,4 @@ if __name__ == '__main__':
     # transfer_tasks = ['Length']
     transfer_tasks = 'SimpelCausal'
     results = se.eval(transfer_tasks)
-    # print(results)
+    print(results)

@@ -38,9 +38,6 @@ class PROBINGEval(object):
                   self.task_data['test']['X']
         return prepare(params, samples)
 
-        # load data to self.task_data
-        # self.task_data = prepare(params)
-
     def loadFile(self, fpath):
         self.tok2split = {'tr': 'train', 'va': 'dev', 'te': 'test'}
         with io.open(fpath, 'r', encoding='utf-8') as f:
@@ -61,31 +58,6 @@ class PROBINGEval(object):
         # print(self.task_data['train']['y'][:5]) # [0, 0, 0, 0, 0]
 
     def run(self, params, batcher):
-
-        # word 2 vec here
-        # print(self.task_data['train']['X'][0]) # [['But', 'it', 'was', 'not', 'here', '.'], ['The', 'one', 'no', 'one', 'cared', 'about', '.'], ['The', 'Bible', 'would', 'be', 'staying', 'here', '.'], ['It', "'s", 'a', 'long', 'hike', '.', '"'], ['A', 'very', 'bad', 'idea', '.']]
-        # print(self.task_data['train']['y'][0]) # [0, 0, 0, 0, 0]
-        # task_embed = {'train': {}, 'dev': {}, 'test': {}}
-        # bsize = params.batch_size
-        # logging.info('Computing embeddings for train/dev/test')
-        # for key in self.task_data:
-        #     # Sort to reduce padding
-        #     sorted_data = sorted(zip(self.task_data[key]['X'],
-        #                              self.task_data[key]['y']),
-        #                          key=lambda z: (len(z[0]), z[1]))
-        #     self.task_data[key]['X'], self.task_data[key]['y'] = map(list, zip(*sorted_data))
-
-        #     task_embed[key]['X'] = []
-        #     for ii in range(0, len(self.task_data[key]['y']), bsize):
-        #         batch = self.task_data[key]['X'][ii:ii + bsize]
-        #         embeddings = batcher(params, batch)
-        #         task_embed[key]['X'].append(embeddings)
-        #     task_embed[key]['X'] = np.vstack(task_embed[key]['X'])
-        #     task_embed[key]['y'] = np.array(self.task_data[key]['y'])
-        # logging.info('Computed embeddings')
-        # print(task_embed['train']['X'][0][:4], len(task_embed['train']['X'][0])) # [-0.2736458  0.202584  -0.31346   -0.141888 ] 300
-        # print(task_embed['train']['y'][0]) # 0
-        # embedded
 
         # word 2 vec by BERT
         task_embed = {'train': {}, 'dev': {}, 'test': {}}
