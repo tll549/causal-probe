@@ -35,7 +35,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='')
 
     # global path parameters
-    parser.add_argument('-data_path', type=str, default='data',
+    parser.add_argument('-data_path', type=str, default='data/causal_probing/SemEval_2010_8/processed/SemEval_processed.txt',
                         help='path to datasets')
     parser.add_argument('-output_path', type=str, default='',
                         help='path to output results')

@@ -118,7 +118,7 @@ class SE(object):
 
         # my own
         elif name == 'SimpelCausal':
-                self.evaluation = SimpelCausalEval(tpath + '/causal_probing', seed=self.params.seed)
+                self.evaluation = SimpelCausalEval(tpath, seed=self.params.seed)
 
         self.params.current_task = name
         self.evaluation.do_prepare(self.params, self.prepare)
