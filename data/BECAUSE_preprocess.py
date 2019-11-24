@@ -11,9 +11,9 @@ def get_args():
     parser.add_argument('-raw_data_path', type=str, 
         default='data/causal_probing/BECAUSE',
         help='')
-    parser.add_argument('-source', type=str, 
-        default='CongressionalHearings',
-        help='')
+    # parser.add_argument('-source', type=str, 
+    #     default='CongressionalHearings',
+    #     help='')
     parser.add_argument('-save_data_path', type=str, 
         default='data/causal_probing/BECAUSE/processed',
         help='')
@@ -26,8 +26,16 @@ class DataLoader(object):
         self.pos_samples = []
 
     def read(self, path):
-        all_txt = glob.glob(os.path.join(path, '*.txt'))
-        all_ann = glob.glob(os.path.join(path, '*.ann'))
+        # self.source = source
+        # if source != 'all':
+        #     path = path + '/' + source
+        # elif source == 'all':
+        #     path = path + '/' + source
+
+        all_txt = glob.glob(os.path.join(path + '/CongressionalHearings/*.txt')) + \
+            glob.glob(os.path.join(path + '/MASC/*.txt'))
+        all_ann = glob.glob(os.path.join(path + '/CongressionalHearings/*.ann')) + \
+            glob.glob(os.path.join(path + '/MASC/*.ann'))
         file_name = [f[:-4] for f in all_txt]
         assert all([f + '.ann' in all_ann for f in file_name]), 'every txt file should correspond to one ann file'
 
@@ -55,11 +63,24 @@ class DataLoader(object):
             # map all tags to idx
             causal_tags_idx = [[tag2idx[tag] for tag in ct] for ct in causal_tags]
 
-            # process paragraph (called it sentences here)
+            # process paragraph (call it sentences here)
+            # if self.source == 'CongressionalHearings':
+            #     all_br = [i for i in range(len(txt)) if txt[i] == '\n']
+            #     sentence_start_end = [(br1+1, br2) for br1, br2 in zip([0] + all_br[:-1], all_br)] # find the index of where a sentence start and end
+            #     sentences = [[i[0], i[1], txt[i[0]:i[1]]] for i in sentence_start_end] # in the format of [start_idx, end_idx, sentence]
+            #     sentences = [s for s in sentences if s[2] != ''] # remove empty
+            # else:
+            txt = re.sub(r'\n\t\t\t\t', '     ', txt)
+            txt = re.sub(r'\n\t\t\t',   '\n   ', txt)
+            txt = re.sub(r'\t', ' ', txt)
+
             all_br = [i for i in range(len(txt)) if txt[i] == '\n']
             sentence_start_end = [(br1+1, br2) for br1, br2 in zip([0] + all_br[:-1], all_br)] # find the index of where a sentence start and end
             sentences = [[i[0], i[1], txt[i[0]:i[1]]] for i in sentence_start_end] # in the format of [start_idx, end_idx, sentence]
-            sentences = [s for s in sentences if s[2] != ''] # remove empty
+            sentences = [s for s in sentences if s[2] != '']
+
+                # print(sentences)
+            # return
 
             # process at the level of sentence, not paragraph like the original doc
             tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -67,6 +88,8 @@ class DataLoader(object):
                 if paragraph[2][-1] == ':': continue # ignore like "The Chairman:"
                 end = paragraph[0]
                 for sent in tokenizer.tokenize(paragraph[2]):
+                    # if 'has eliminated its' in sent:
+                    #     print(sentences, end='\n\n')
                     start = end
                     end = start + len(sent) + 1
                     y = 0
@@ -77,6 +100,8 @@ class DataLoader(object):
                                 txt[causal_tuple[0][0]:causal_tuple[0][1]], causal_tuple, sent))
                             break
                     self.y.append(y)
+                    # remove excess whitespaces
+                    sent = ' '.join(sent.split())
                     self.X.append(sent)
 
             # print(self.X)
@@ -118,7 +143,7 @@ if __name__ == '__main__':
     # print(args)
 
     dl = DataLoader()
-    dl.read(args.raw_data_path + '/' + args.source)
+    dl.read(args.raw_data_path)
     dl.preprocess()
     dl.split()
-    dl.write(args.save_data_path + '/' + args.source + '.txt')
+    dl.write(args.save_data_path + '/because_all.txt')
