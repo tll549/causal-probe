@@ -2,6 +2,7 @@ import io
 import numpy as np
 import logging
 import os
+import re
 
 from causal_probe import utils
 from data import SemEval_preprocess
@@ -57,6 +58,7 @@ class engine(object):
 		self.data = {'X': [], 'y': [], 'rel': []}
 		with io.open(fpath, 'r', encoding='utf-8') as f:
 			for line in f:
+				# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
 				line = line.rstrip().split('\t')
 				self.data['y'].append(line[1])
 				self.data['X'].append(line[2])
@@ -65,56 +67,66 @@ class engine(object):
 		logging.info(f'Loaded {len(self.data["X"])}')
 
 	def prepare_data(self):
-		# data = {'orgi':, 'shuf': , 'trunc': , 'shuf_trunc'}
 		# print(data['X'][:3])
 		self.data['X_shuf'], self.data['X_trunc'], self.data['X_shuf_trunc'] = [], [], []
-		def shuffle(x):
+		def tokenize_with_mask(x):
+			# x = 'eroj ewriow eio. fwiej; fweji, wdej! erijf?'
+			# print(x)
+			x = re.sub(r'([.,!?;])', r' \1', x) # replace sth like '.' to ' .'
 			# print(x)
 			x = x.split()
+			# print(x)
+			# separate like [MASK]. to [MASK] .
+			# mask_index = [i for i in range(len(x)) if '[MASK]' in x[i] and x[i] != '[MASK]']
+			# for i in mask_index:
+			# 	x.insert(i+1, re.sub(r'\[MASK\]', '', x[i]))
+			# 	x[i] = '[MASK]'
+			# period = x[-2][-1]
+			# x[-2] = x[-2][:-1]
+			# x.insert(-1, period)
+
+			# print(x)
 			# join like [MASK] [MASK]
 			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
 			x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
-
-			start_token, end_token = x[0], x[-1]
-			x = x[1:-1]
-			period = x[-1][-1]
-			x[-1] = x[-1][:-1]
+			return x
+		def shuffle(x):
+			'''shuffle everything except [CLS], last character (period), [SEP]'''
+			x = tokenize_with_mask(x)
 			# print(x)
-			# print(start_token, end_token, period)
+			start_token, end_token, period = x.pop(0), x.pop(), x.pop()
+			# print(x)
 			np.random.shuffle(x)
-			x.insert(0, start_token)
-			x[-1] += period
-			x.append(end_token)
+			# x[-1] = x[-1] + period
+			x = [start_token] + x + [period, end_token]
+			# print(x)
+			# print(' '.join(x))
+			# print()
 			return ' '.join(x)
 		def truncate(x):
-			x = x.split()
-			# join like [MASK] [MASK]
+			'''truncate the sentence to A B [MASK] C D, or A B C D [MASK], etc'''
+			x = tokenize_with_mask(x)
+			start_token, end_token = x.pop(0), x.pop()
 			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
-			x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
-
-			start_token, end_token = x[0], x[-1]
-			x = x[1:-1]
-			period = x[-1][-1]
-			x[-1] = x[-1][:-1]
-			# print(x)
-			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
-			# print(mask_index)
 			# assert mask_index[-1] - mask_index[0] == len(mask_index) - 1, 'masks should be neighbor'
 			
 			keep = 2
+			# print(mask_index)
 			start_idx, end_idx = mask_index[0]-keep, mask_index[-1]+keep
+			# print(start_idx, end_idx)
 			if start_idx < 0:
 				end_idx += -start_idx
 				start_idx = 0
 			elif end_idx >= len(x):
 				# print(end_idx, len(x))
 				start_idx -= end_idx - len(x) + 1
+				start_idx = 0 if start_idx < 0 else start_idx
 			# print(start_idx, end_idx)
+			# print()
 			x = x[start_idx:end_idx+1]
-			# print(x)
-			x.insert(0, start_token)
+			# period = x.pop()
 			# x[-1] += period
-			x.append(end_token)
+			x = [start_token] + x + [end_token]
 			# print(x)
 			# ignore this restriction when the sentence is short, or when mask is not in neighbor (after shuffle)
 			if len(x) > 6 and mask_index[-1] - mask_index[0] == len(mask_index) - 1: 
@@ -124,12 +136,15 @@ class engine(object):
 		np.random.seed(self.params.seed)
 		for i in range(len(self.data['X'])):
 			# print(self.data['X'][i])
+
 			shuf = shuffle(self.data['X'][i])
 			self.data['X_shuf'].append(shuf)
 			# print(shuf)
+
 			trunc = truncate(self.data['X'][i])
 			self.data['X_trunc'].append(trunc)
 			# print(trunc)
+
 			shuf_trunc = truncate(shuf)
 			self.data['X_shuf_trunc'].append(shuf_trunc)
 			# print(shuf_trunc)
@@ -205,20 +220,17 @@ class engine(object):
 	def predict_mask(self):
 		logging.info('predicting...')
 		k = self.params.k
-		# X = self.data['X']
 		
-		
-		# correct = {k:[] for k in list(set(rel))}
 		X_types = ['X', 'X_shuf', 'X_trunc', 'X_shuf_trunc']
 		correct = {k:{X_type:[] for X_type in X_types} for k in list(set(self.data['rel']))}
 		self.pred = []
 		
 		for i in range(len(self.data['X'])):
 			pred = []
+			y = self.data['y'][i]
+			rel = self.data['rel'][i]
 			for X_type in X_types:
 				x = self.data[X_type][i]
-				y = self.data['y'][i]
-				rel = self.data['rel'][i]
 
 				# print(x)
 				tokenized_text = self.params.tokenizer.tokenize(x)
@@ -250,6 +262,9 @@ class engine(object):
 				correct[rel][X_type].append(int(all(num_correct)))
 
 				pred += [x, top_k_preds, all(num_correct)]
+			pred += [y, rel]
+			print(pred)
+			print()
 
 			self.pred.append(pred)
 			if self.params.trial:
