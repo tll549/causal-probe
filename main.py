@@ -11,6 +11,9 @@ import sys
 import io
 import numpy as np
 import logging
+logging.basicConfig(level=logging.INFO, 
+    format='%(asctime)s %(levelname)s %(name)s : %(message)s')
+
 import argparse
 
 # Set PATHs
@@ -21,6 +24,7 @@ PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 # import SentEval
 # sys.path.insert(0, PATH_TO_SENTEVAL)
 import senteval
+import causal_probe
 
 # from reference.encoder import Encoder
 from utils import dotdict
@@ -35,7 +39,8 @@ def get_args():
     parser = argparse.ArgumentParser(description='')
 
     # global path parameters
-    parser.add_argument('-data_path', type=str, default='data/causal_probing/SemEval_2010_8/processed/SemEval_processed.txt',
+    parser.add_argument('-data_path', type=str, 
+        default='data/causal_probing/SemEval_2010_8/processed/SemEval_processed.txt',
                         help='path to datasets')
     parser.add_argument('-output_path', type=str, default='',
                         help='path to output results')
@@ -83,6 +88,19 @@ def get_args():
     # # output settings
     # parser.add_argument('-output_test', action='store_true',
     #                     help='use test set and output the result')
+
+
+    # probing task
+    parser.add_argument('-probe', type=str, default='simple',
+        choices=['simple', 'mask', 'choice'],
+        help='types of probing task, (simpel causal, predict masked, choose between two choises)')
+    parser.add_argument('-dataset', type=str, default='semeval',
+        choices=['semeval', 'because'],
+        help='')
+    parser.add_argument('-k', type=int, default=5,
+        help='')
+
+
     return parser.parse_args()
 
 
@@ -230,36 +248,57 @@ def batcher(params, batch):
 
 
 # Set up logger
-logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
+# logging.basicConfig(level=logging.INFO,
+#     format='%(asctime)s %(levelname)s %(name)s : %(message)s', 
+#     # datefmt='%Y%m%d %H%M%s'
+    # )
+# logging.basicConfig(level=logging.INFO, format='%(message)s')
 # logging.basicConfig(filename=log_file, filemode=file_mode_dict[args.rerun],
 #                             level=logging.INFO, format='%(asctime)s %(message)s',
 #                             datefmt='%m-%d %H:%M')
 
 if __name__ == '__main__':
     args = get_args()
-    logging.debug(args)
+    # logging.debug(args)
 
-    # par settings from lingyu
-    params_senteval = {'task_path': args.data_path,
-                           'output_path': args.output_path,
-                           'rerun': args.rerun,
-                           'reset_data': args.reset_data,
-                           'batch_size': args.batch_size,
+    if args.probe == 'simple':
+        # par settings from lingyu
+        params_senteval = {'task_path': args.data_path,
+                               'output_path': args.output_path,
+                               'rerun': args.rerun,
+                               'reset_data': args.reset_data,
+                               'batch_size': args.batch_size,
 
-                        # 'usepytorch': True, 'kfold': 5, # from example
+                            # 'usepytorch': True, 'kfold': 5, # from example
 
-                           'pretrained': {'model': args.model,
-                                          'model_type': args.model_type,
-                                          'cased': args.cased,
-                                          'fine_tune': args.fine_tune,
-                                          'method': args.method},
-                           'classifier': {'optim': args.optim,
-                                          'nhid': 0,
-                                          'noreg': True}
-                           }
+                               'pretrained': {'model': args.model,
+                                              'model_type': args.model_type,
+                                              'cased': args.cased,
+                                              'fine_tune': args.fine_tune,
+                                              'method': args.method},
+                               'classifier': {'optim': args.optim,
+                                              'nhid': 0,
+                                              'noreg': True}
+                               }
 
-    se = senteval.engine.SE(params_senteval, batcher, prepare)
-    # transfer_tasks = ['Length']
-    transfer_tasks = 'SimpelCausal'
-    results = se.eval(transfer_tasks)
-    print(results)
+        se = senteval.engine.SE(params_senteval, batcher, prepare)
+        # transfer_tasks = ['Length']
+        transfer_tasks = 'SimpelCausal'
+        results = se.eval(transfer_tasks)
+        print(results)
+    elif args.probe == 'mask':
+        params = {
+            'probing_task': args.probe,
+            'dataset': args.dataset,
+            'reset_data': False,
+            'seed': 555,
+            'pretrained': {
+                'model': args.model,
+                'model_type': args.model_type,
+                'cased': args.cased
+            },
+            'k': args.k
+        }
+        ce = causal_probe.engine(params)
+        result = ce.eval()
+        # print(result)
