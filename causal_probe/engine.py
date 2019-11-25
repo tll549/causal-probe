@@ -205,4 +205,4 @@ class engine(object):
 				f.write(o)
 		with open(path + f'_{self.params.k}_acc.txt', 'w+', encoding='utf-8') as f:
 			for k, v in self.acc.items():
-				f.write(k + ' : ' + v + '\n')
+				f.write(k + ' : ' + str(v) + '\n')
