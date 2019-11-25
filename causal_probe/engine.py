@@ -31,20 +31,20 @@ class engine(object):
 
 		if self.params.probing_task == 'simpel':
 			# not done yet
-			self.encode()
-
+			# self.encode()
+			return
 		elif self.params.probing_task == 'mask':
 			self.predict_mask()
 
 		self.save_pred(SemEval_LOGS_DATAPATH)
-		return
 
 	def preprocess_data(self):
+		logging.info('preprocessing data...')
 		if self.params.dataset == 'semeval':
 			dl = SemEval_preprocess.DataLoader()
 			dl.read(SemEval_RAW_DATAPATH)
 			dl.preprocess(self.params.probing_task, mask='cause')
-			dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
+			# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
 			dl.write(SemEval_PROCESSED_DATAPATH)
 
 	def load_data(self):
@@ -54,15 +54,23 @@ class engine(object):
 			fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
 
 		# from senteval
-		self.tok2split = {'tr': 'train', 'va': 'dev', 'te': 'test'}
-		self.data = {'train': {'X': [], 'y': []},
-						  'dev': {'X': [], 'y': []},
-						  'test': {'X': [], 'y': []}}
+		# self.tok2split = {'tr': 'train', 'va': 'dev', 'te': 'test'}
+		# self.data = {'train': {'X': [], 'y': []},
+		# 				  'dev': {'X': [], 'y': []},
+		# 				  'test': {'X': [], 'y': []}}
+		self.data = {'X': [], 'y': [], 'rel': []}
 		with io.open(fpath, 'r', encoding='utf-8') as f:
 			for line in f:
 				line = line.rstrip().split('\t')
-				self.data[self.tok2split[line[0]]]['X'].append(line[-1])
-				self.data[self.tok2split[line[0]]]['y'].append(line[1])
+				# self.data[self.tok2split[line[0]]]['X'].append(line[-1])
+				# self.data[self.tok2split[line[0]]]['y'].append(line[1])
+				# print(line)
+				self.data['y'].append(line[1])
+				self.data['X'].append(line[2])
+				self.data['rel'].append(line[3])
+		# print(self.data['X'][:3])
+		# print(self.data['y'][:3])
+		# print(self.data['rel'][:3])
 
 		# labels = sorted(np.unique(self.data['train']['y']))
 		# self.tok2label = dict(zip(labels, range(len(labels))))
@@ -72,9 +80,10 @@ class engine(object):
 		# 	for i, y in enumerate(self.data[split]['y']):
 		# 		self.data[split]['y'][i] = self.tok2label[y]
 
-		logging.info('Loaded %s train - %s dev - %s test' %
-					 (len(self.data['train']['y']), len(self.data['dev']['y']),
-					  len(self.data['test']['y'])))
+		# logging.info('Loaded %s train - %s dev - %s test' %
+		# 			 (len(self.data['train']['y']), len(self.data['dev']['y']),
+		# 			  len(self.data['test']['y'])))
+		logging.info(f'Loaded {len(self.data["X"])}')
 
 	def prepare(self):
 		logging.info('preparing...')
@@ -141,9 +150,13 @@ class engine(object):
 		logging.info('predicting...')
 		# tokenize
 		k = self.params.k
-		X = self.data['train']['X'] + self.data['train']['X'] + self.data['train']['X']
-		y = self.data['train']['y'] + self.data['train']['y'] + self.data['train']['y']
-		correct = 0
+		# X = self.data['train']['X'] + self.data['train']['X'] + self.data['train']['X']
+		# y = self.data['train']['y'] + self.data['train']['y'] + self.data['train']['y']
+		X = self.data['X']
+		y = self.data['y']
+		rel = self.data['rel']
+		# print(self.data['X'])
+		correct = {k:[] for k in list(set(rel))}
 		self.pred = []
 		for i in range(len(X)):
 			# print(X[i])
@@ -173,18 +186,23 @@ class engine(object):
 			# print()
 
 			num_correct = [y[i].split()[j] in top_tok_preds[j] for j in range(len(masked_index))]
-			if all(num_correct):
-				correct += 1
+			correct[rel[i]].append(int(all(num_correct)))
 
-			self.pred.append([X[i], top_tok_preds, y[i], num_correct])
+			self.pred.append([X[i], top_tok_preds, y[i], num_correct, rel[i]])
 
-			# if i == 8:
-			# 	break
-		acc = correct / len(y)
-		logging.info(f'acc: {acc}')
+			if self.params.trial:
+				if i == 8:
+					break
+		# print(correct)
+		self.acc = {k:np.mean(v) if v != [] else 0 for k, v in correct.items()}
+		# acc = correct / len(y)
+		logging.info(f'acc: {self.acc}')
 
 	def save_pred(self, path):
 		with open(path + f'_{self.params.k}.txt', 'w+', encoding='utf-8') as f:
 			for l in self.pred:
-				o = f'{l[0]}\t{str(l[1])}\t{l[2]}\t{l[3]}\n'
+				o = f'{l[0]}\t{str(l[1])}\t{l[2]}\t{l[3]}\t{l[4]}\n'
 				f.write(o)
+		with open(path + f'_{self.params.k}_acc.txt', 'w+', encoding='utf-8') as f:
+			for k, v in self.acc.items():
+				f.write(k + ' : ' + v + '\n')

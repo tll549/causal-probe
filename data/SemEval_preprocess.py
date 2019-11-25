@@ -16,6 +16,7 @@ import random
 class DataLoader(object):
     def __init__(self):
         self.X, self.y = [], []
+        self.rel = []
 
     def read(self, data_path):
         with open(data_path) as f:
@@ -42,11 +43,13 @@ class DataLoader(object):
             # retain y as only causal or not
             self.y = [int('Cause-Effect' in e) for e in self.y]
         if probing_task == 'mask':
+            all_relations_dict = {k:re.sub(r'\(e\d,e\d\)', '', k) for k in list(set(self.y))}
+
             X, y = [], []
             for i in range(len(self.X)):
-                # keep only those are causal
-                if 'Cause-Effect' not in self.y[i]:
-                    continue
+                # causal or not
+                self.rel.append(all_relations_dict[self.y[i]])
+
                 # mask the cause or effect
                 if (mask == 'cause' and self.y[i] == 'Cause-Effect(e1,e2)') or \
                     (mask == 'effect' and self.y[i] == 'Cause-Effect(e2,e1)'):
@@ -63,7 +66,7 @@ class DataLoader(object):
                 y.append(re.sub(r'</?e\d>', '', temp_y))
             self.X, self.y = X, y
 
-        logging.debug(f'processed len X: {len(self.X)}')
+        logging.info(f'processed len X: {len(self.X)}, causal: {sum([rel == "Cause-Effect" for rel in self.rel])}')
 
     def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
         random.seed(seed)
@@ -79,14 +82,22 @@ class DataLoader(object):
         assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
 
     def write(self, data_path):
+        # with open(data_path, 'w+') as f:
+        #     for i in self.train_idx:
+        #         f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+        #     for i in self.dev_idx:
+        #         f.write(f'va\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+        #     for i in self.test_idx:
+        #         f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+        # logging.info(f'data wrote')
+
         with open(data_path, 'w+') as f:
-            for i in self.train_idx:
-                f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-            for i in self.dev_idx:
-                f.write(f'va\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-            for i in self.test_idx:
-                f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
+            for i in range(len(self.X)):
+                # print(self.y[i], self.X[i], self.causal[i])
+                f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\t{self.rel[i]}\n')
+                # f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
         logging.info(f'data wrote')
+
 
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)

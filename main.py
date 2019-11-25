@@ -12,7 +12,8 @@ import io
 import numpy as np
 import logging
 logging.basicConfig(level=logging.INFO, 
-    format='%(asctime)s %(levelname)s %(name)s : %(message)s')
+    format='%(asctime)s %(levelname)s %(name)s : %(message)s',
+    datefmt='%Y%m%d %H%M%S')
 
 import argparse
 
@@ -44,8 +45,8 @@ def get_args():
                         help='path to datasets')
     parser.add_argument('-output_path', type=str, default='',
                         help='path to output results')
-    parser.add_argument('-seed', type=int, default=0,
-                        help='Random seed (default: 0)')
+    # parser.add_argument('-seed', type=int, default=0,
+    #                     help='Random seed (default: 0)')
 
     # model settings
     parser.add_argument('-model', type=str, default='bert', 
@@ -72,7 +73,7 @@ def get_args():
                         help='optimizer ("sgd,lr=0.1", "adam", "rmsprop" ..)')
 
     # reset data or not
-    parser.add_argument('-reset_data', action='store_true', help='reset data instead of loading')
+    # parser.add_argument('-reset_data', action='store_true', help='reset data instead of loading')
     parser.add_argument('-rerun', action='store_true',
                         help='rerun this setting whether it was ran before')
 
@@ -91,12 +92,17 @@ def get_args():
 
 
     # probing task
+    parser.add_argument('-trial', type=bool, default=False,
+        help='')
     parser.add_argument('-probe', type=str, default='simple',
         choices=['simple', 'mask', 'choice'],
         help='types of probing task, (simpel causal, predict masked, choose between two choises)')
     parser.add_argument('-dataset', type=str, default='semeval',
         choices=['semeval', 'because'],
         help='')
+    parser.add_argument('-reset_data', type=bool, default=False,
+        help='')
+    parser.add_argument('-seed', type=int, default=555)
     parser.add_argument('-k', type=int, default=5,
         help='')
 
@@ -246,17 +252,6 @@ def batcher(params, batch):
         # print(embeddings)
         return embeddings
 
-
-# Set up logger
-# logging.basicConfig(level=logging.INFO,
-#     format='%(asctime)s %(levelname)s %(name)s : %(message)s', 
-#     # datefmt='%Y%m%d %H%M%s'
-    # )
-# logging.basicConfig(level=logging.INFO, format='%(message)s')
-# logging.basicConfig(filename=log_file, filemode=file_mode_dict[args.rerun],
-#                             level=logging.INFO, format='%(asctime)s %(message)s',
-#                             datefmt='%m-%d %H:%M')
-
 if __name__ == '__main__':
     args = get_args()
     # logging.debug(args)
@@ -288,10 +283,11 @@ if __name__ == '__main__':
         print(results)
     elif args.probe == 'mask':
         params = {
+            'trial': args.trial,
             'probing_task': args.probe,
             'dataset': args.dataset,
-            'reset_data': False,
-            'seed': 555,
+            'reset_data': args.reset_data,
+            'seed': args.seed,
             'pretrained': {
                 'model': args.model,
                 'model_type': args.model_type,
