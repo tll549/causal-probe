@@ -27,7 +27,8 @@ class engine(object):
 			self.preprocess_data()
 		assert os.path.exists(SemEval_PROCESSED_DATAPATH), 'should preprocess data first'
 		self.load_data()
-		self.prepare()
+		self.prepare_data()
+		self.prepare_encoder()
 
 		if self.params.probing_task == 'simpel':
 			# not done yet
@@ -53,39 +54,94 @@ class engine(object):
 		elif self.params.dataset == 'because':
 			fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
 
-		# from senteval
-		# self.tok2split = {'tr': 'train', 'va': 'dev', 'te': 'test'}
-		# self.data = {'train': {'X': [], 'y': []},
-		# 				  'dev': {'X': [], 'y': []},
-		# 				  'test': {'X': [], 'y': []}}
 		self.data = {'X': [], 'y': [], 'rel': []}
 		with io.open(fpath, 'r', encoding='utf-8') as f:
 			for line in f:
 				line = line.rstrip().split('\t')
-				# self.data[self.tok2split[line[0]]]['X'].append(line[-1])
-				# self.data[self.tok2split[line[0]]]['y'].append(line[1])
-				# print(line)
 				self.data['y'].append(line[1])
 				self.data['X'].append(line[2])
 				self.data['rel'].append(line[3])
-		# print(self.data['X'][:3])
-		# print(self.data['y'][:3])
-		# print(self.data['rel'][:3])
 
-		# labels = sorted(np.unique(self.data['train']['y']))
-		# self.tok2label = dict(zip(labels, range(len(labels))))
-		# self.nclasses = len(self.tok2label)
-
-		# for split in self.data:
-		# 	for i, y in enumerate(self.data[split]['y']):
-		# 		self.data[split]['y'][i] = self.tok2label[y]
-
-		# logging.info('Loaded %s train - %s dev - %s test' %
-		# 			 (len(self.data['train']['y']), len(self.data['dev']['y']),
-		# 			  len(self.data['test']['y'])))
 		logging.info(f'Loaded {len(self.data["X"])}')
 
-	def prepare(self):
+	def prepare_data(self):
+		# data = {'orgi':, 'shuf': , 'trunc': , 'shuf_trunc'}
+		# print(data['X'][:3])
+		self.data['X_shuf'], self.data['X_trunc'], self.data['X_shuf_trunc'] = [], [], []
+		def shuffle(x):
+			# print(x)
+			x = x.split()
+			# join like [MASK] [MASK]
+			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
+			x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
+
+			start_token, end_token = x[0], x[-1]
+			x = x[1:-1]
+			period = x[-1][-1]
+			x[-1] = x[-1][:-1]
+			# print(x)
+			# print(start_token, end_token, period)
+			np.random.shuffle(x)
+			x.insert(0, start_token)
+			x[-1] += period
+			x.append(end_token)
+			return ' '.join(x)
+		def truncate(x):
+			x = x.split()
+			# join like [MASK] [MASK]
+			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
+			x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
+
+			start_token, end_token = x[0], x[-1]
+			x = x[1:-1]
+			period = x[-1][-1]
+			x[-1] = x[-1][:-1]
+			# print(x)
+			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
+			# print(mask_index)
+			# assert mask_index[-1] - mask_index[0] == len(mask_index) - 1, 'masks should be neighbor'
+			
+			keep = 2
+			start_idx, end_idx = mask_index[0]-keep, mask_index[-1]+keep
+			if start_idx < 0:
+				end_idx += -start_idx
+				start_idx = 0
+			elif end_idx >= len(x):
+				# print(end_idx, len(x))
+				start_idx -= end_idx - len(x) + 1
+			# print(start_idx, end_idx)
+			x = x[start_idx:end_idx+1]
+			# print(x)
+			x.insert(0, start_token)
+			# x[-1] += period
+			x.append(end_token)
+			# print(x)
+			# ignore this restriction when the sentence is short, or when mask is not in neighbor (after shuffle)
+			if len(x) > 6 and mask_index[-1] - mask_index[0] == len(mask_index) - 1: 
+				assert len(x) == 2 + len(mask_index) + keep*2
+			return ' '.join(x)
+
+		np.random.seed(self.params.seed)
+		for i in range(len(self.data['X'])):
+			# print(self.data['X'][i])
+			shuf = shuffle(self.data['X'][i])
+			self.data['X_shuf'].append(shuf)
+			# print(shuf)
+			trunc = truncate(self.data['X'][i])
+			self.data['X_trunc'].append(trunc)
+			# print(trunc)
+			shuf_trunc = truncate(shuf)
+			self.data['X_shuf_trunc'].append(shuf_trunc)
+			# print(shuf_trunc)
+			# print()
+			# break
+		
+		# print(self.data['X'][7555])
+		# print(self.data['X_shuf'][7555])
+		# print(self.data['X_trunc'][7555])
+		# print(self.data['X_shuf_trunc'][7555])
+
+	def prepare_encoder(self):
 		logging.info('preparing...')
 		params = self.params
 
@@ -148,60 +204,69 @@ class engine(object):
 
 	def predict_mask(self):
 		logging.info('predicting...')
-		# tokenize
 		k = self.params.k
-		# X = self.data['train']['X'] + self.data['train']['X'] + self.data['train']['X']
-		# y = self.data['train']['y'] + self.data['train']['y'] + self.data['train']['y']
-		X = self.data['X']
-		y = self.data['y']
-		rel = self.data['rel']
-		# print(self.data['X'])
-		correct = {k:[] for k in list(set(rel))}
+		# X = self.data['X']
+		
+		
+		# correct = {k:[] for k in list(set(rel))}
+		X_types = ['X', 'X_shuf', 'X_trunc', 'X_shuf_trunc']
+		correct = {k:{X_type:[] for X_type in X_types} for k in list(set(self.data['rel']))}
 		self.pred = []
-		for i in range(len(X)):
-			# print(X[i])
-			tokenized_text = self.params.tokenizer.tokenize(X[i])
-			# print(tokenized_text)
-			indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
-			# print(indexed_tokens)
-			masked_index = [i for i in range(len(tokenized_text)) if tokenized_text[i] == '[MASK]']
-			# print(masked_index)
-			tokens_tensor = torch.tensor([indexed_tokens])
-			tokens_tensor = tokens_tensor.to(DEVICE)
+		
+		for i in range(len(self.data['X'])):
+			pred = []
+			for X_type in X_types:
+				x = self.data[X_type][i]
+				y = self.data['y'][i]
+				rel = self.data['rel'][i]
 
-			with torch.no_grad():
-				outputs = self.params.encoder(tokens_tensor)
-				predictions = outputs[0]
-			# print(predictions.shape) # 1, 19, 768
-			# print(predictions[0, masked_index].shape) # 2, 768
-			soft_pred = torch.softmax(predictions[0, masked_index], 1)
-			# print(soft_pred.shape) # 2, 768
-			top_inds = torch.argsort(soft_pred, descending=True)[:, :k].cpu().numpy()
-			# print(top_inds.shape) # 2, 5
-			# top_probs = [soft_pred[tgt_ind].item() for tgt_ind in top_inds]
-			top_tok_preds = [self.params.tokenizer.convert_ids_to_tokens(top_inds[to_pred, :]) \
-				for to_pred in range(top_inds.shape[0])]
-			# print(top_tok_preds)
-			# print(y[i])
-			# print()
+				# print(x)
+				tokenized_text = self.params.tokenizer.tokenize(x)
+				# print(tokenized_text)
+				indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
+				# print(indexed_tokens)
+				masked_index = [i for i in range(len(tokenized_text)) if tokenized_text[i] == '[MASK]']
+				# print(masked_index)
+				tokens_tensor = torch.tensor([indexed_tokens])
+				tokens_tensor = tokens_tensor.to(DEVICE)
 
-			num_correct = [y[i].split()[j] in top_tok_preds[j] for j in range(len(masked_index))]
-			correct[rel[i]].append(int(all(num_correct)))
+				with torch.no_grad():
+					outputs = self.params.encoder(tokens_tensor)
+					predictions = outputs[0]
+				# print(predictions.shape) # 1, 19, 768
+				# print(predictions[0, masked_index].shape) # 2, 768
+				soft_pred = torch.softmax(predictions[0, masked_index], 1)
+				# print(soft_pred.shape) # 2, 768
+				top_inds = torch.argsort(soft_pred, descending=True)[:, :k].cpu().numpy()
+				# print(top_inds.shape) # 2, 5
+				# top_probs = [soft_pred[tgt_ind].item() for tgt_ind in top_inds]
+				top_k_preds = [self.params.tokenizer.convert_ids_to_tokens(top_inds[to_pred, :]) \
+					for to_pred in range(top_inds.shape[0])]
+				# print(top_k_preds)
+				# print(y)
+				# print()
 
-			self.pred.append([X[i], top_tok_preds, y[i], num_correct, rel[i]])
+				num_correct = [y.split()[j] in top_k_preds[j] for j in range(len(masked_index))]
+				correct[rel][X_type].append(int(all(num_correct)))
 
+				pred += [x, top_k_preds, all(num_correct)]
+
+			self.pred.append(pred)
 			if self.params.trial:
 				if i == 8:
 					break
-		# print(correct)
-		self.acc = {k:np.mean(v) if v != [] else 0 for k, v in correct.items()}
-		# acc = correct / len(y)
+		self.acc = {k1:{k2:np.mean(v2) if v2 != [] else 0 for k2, v2 in v1.items()} for k1, v1 in correct.items()}
 		logging.info(f'acc: {self.acc}')
+		# print(self.pred[8])
 
 	def save_pred(self, path):
+		# if self.params.trial:
+		# 	return
+
 		with open(path + f'_{self.params.k}.txt', 'w+', encoding='utf-8') as f:
 			for l in self.pred:
-				o = f'{l[0]}\t{str(l[1])}\t{l[2]}\t{l[3]}\t{l[4]}\n'
+				# o = f'{l[0]}\t{str(l[1])}\t{l[2]}\t{l[3]}\t{l[4]}\n'
+				o = '\t'.join([str(x) for x in l]) + '\n'
 				f.write(o)
 		with open(path + f'_{self.params.k}_acc.txt', 'w+', encoding='utf-8') as f:
 			for k, v in self.acc.items():
