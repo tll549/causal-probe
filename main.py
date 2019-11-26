@@ -1,10 +1,3 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-#
-
 from __future__ import absolute_import, division, unicode_literals
 
 import sys
@@ -103,9 +96,9 @@ def get_args():
     parser.add_argument('-reset_data', type=bool, default=False,
         help='')
     parser.add_argument('-seed', type=int, default=555)
-    parser.add_argument('-k', type=int, default=5,
+    parser.add_argument('-mask', type=str, default='cause',
+        choices=['cause', 'effect'],
         help='')
-
 
     return parser.parse_args()
 
@@ -293,7 +286,7 @@ if __name__ == '__main__':
                 'model_type': args.model_type,
                 'cased': args.cased
             },
-            'k': args.k
+            'mask': args.mask
         }
         ce = causal_probe.engine(params)
         result = ce.eval()

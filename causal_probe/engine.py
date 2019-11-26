@@ -3,6 +3,7 @@ import numpy as np
 import logging
 import os
 import re
+import pickle
 
 from causal_probe import utils
 from data import SemEval_preprocess
@@ -14,8 +15,8 @@ from transformers import BertTokenizer, BertModel, BertForMaskedLM
 PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
 SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
-SemEval_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask_processed.txt'
-SemEval_LOGS_DATAPATH = 'logs/SemEval_logs_mask.txt'
+SemEval_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask'
+SemEval_LOGS_DATAPATH = 'logs/'
 
 class engine(object):
 	def __init__(self, params):
@@ -23,40 +24,47 @@ class engine(object):
 		self.params.pretrained = utils.dotdict(self.params.pretrained)
 		logging.info('params: ' + str(self.params))
 
+		self.processed_datapath = SemEval_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
+		self.last_filename = '{}_{}_{}_{}_{}'.format(
+			'_TRIAL' if self.params.trial else '',
+			self.params.dataset, self.params.probing_task, 
+			self.params.mask, self.params.seed)
+
 	def eval(self):
 		if self.params.reset_data:
 			self.preprocess_data()
-		assert os.path.exists(SemEval_PROCESSED_DATAPATH), 'should preprocess data first'
+		assert os.path.exists(self.processed_datapath), 'should preprocess data first'
 		self.load_data()
 		self.prepare_data()
 		self.prepare_encoder()
 
 		if self.params.probing_task == 'simple':
 			# not done yet
-			# self.encode()
 			return
 		elif self.params.probing_task == 'mask':
 			self.predict_mask()
 
 		self.save_pred(SemEval_LOGS_DATAPATH)
 
+		self.plot_acc(SemEval_LOGS_DATAPATH)
+
 	def preprocess_data(self):
 		logging.info('preprocessing data...')
 		if self.params.dataset == 'semeval':
 			dl = SemEval_preprocess.DataLoader()
 			dl.read(SemEval_RAW_DATAPATH)
-			dl.preprocess(self.params.probing_task, mask='cause')
+			dl.preprocess(self.params.probing_task, mask=self.params.mask)
 			# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
-			dl.write(SemEval_PROCESSED_DATAPATH)
+			dl.write(self.processed_datapath)
 
 	def load_data(self):
-		if self.params.dataset == 'semeval':
-			fpath = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask_processed.txt'
-		elif self.params.dataset == 'because':
-			fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
+		# if self.params.dataset == 'semeval':
+		# 	fpath = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask_processed.txt'
+		# elif self.params.dataset == 'because':
+		# 	fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
 
 		self.data = {'X_orig': [], 'y': [], 'rel': []}
-		with io.open(fpath, 'r', encoding='utf-8') as f:
+		with io.open(self.processed_datapath, 'r', encoding='utf-8') as f:
 			for line in f:
 				# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
 				line = line.rstrip().split('\t')
@@ -285,13 +293,41 @@ class engine(object):
 		logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
 
 	def save_pred(self, path):
-		# if self.params.trial:
-		# 	return
-
-		with open(path, 'w+', encoding='utf-8') as f:
+		with open(path + 'result' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
 			for l in self.pred:
 				o = '\t'.join([str(x) for x in l]) + '\n'
 				f.write(o)
-		with open(path, 'w+', encoding='utf-8') as f:
+		with open(path + 'result' + self.last_filename + '.pkl', 'wb') as f:
+			pickle.dump(self.pred, f)
+
+		with open(path + 'acc' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
 			for k, v in self.acc.items():
 				f.write(k + ' : ' + str(v) + '\n')
+		with open(path + 'acc' + self.last_filename + '.pkl', 'wb') as f:
+			pickle.dump(self.acc, f)
+
+		logging.info('files saved')
+
+	def plot_acc(self, path):
+		import pandas as pd
+		import seaborn as sns
+
+		with open(path + 'acc' + self.last_filename + '.pkl', 'rb') as f:
+			acc = pickle.load(f)
+		
+		d = pd.DataFrame()
+		for rel in acc:
+			for k in acc[rel]:
+				for X_type in acc[rel][k]:
+					d = d.append({'rel': rel, 'k': k, 'X_type': X_type, 
+						'acc': acc[rel][k][X_type]}, ignore_index=True)
+
+		for rel in d.rel.unique():
+			g = sns.catplot(x='k', y='acc', hue='X_type', 
+				hue_order=['X_orig', 'X_trunc', 'X_shuf', 'X_shuf_trunc'],
+				data=d[d.rel == rel], kind='bar',
+				palette='Set1')
+			g.savefig(path + 'fig_' + rel + self.last_filename + '.png',
+				dpi=600, bbox_inches='tight')
+
+		logging.info('fig saved')

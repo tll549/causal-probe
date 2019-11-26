@@ -1,17 +1,6 @@
 import re
 import logging
-# import argparse
 import random
-
-# def get_args():
-#     parser = argparse.ArgumentParser(description='')
-#     parser.add_argument('-raw_data_path', type=str, 
-#         default='data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT',
-#         help='raw data path to SemEval')
-#     parser.add_argument('-save_data_path', type=str, 
-#         default='data/causal_probing/SemEval_2010_8/processed/SemEval_processed.txt',
-#         help='raw data path to SemEval')
-#     return parser.parse_args()
 
 class DataLoader(object):
     def __init__(self):
@@ -47,12 +36,10 @@ class DataLoader(object):
 
             X, y = [], []
             for i in range(len(self.X)):
-                # causal or not
                 self.rel.append(all_relations_dict[self.y[i]])
-
                 # mask the cause or effect
-                if (mask == 'cause' and self.y[i] == 'Cause-Effect(e1,e2)') or \
-                    (mask == 'effect' and self.y[i] == 'Cause-Effect(e2,e1)'):
+                if (mask == 'cause' and '(e1,e2)' in self.y[i]) or \
+                    (mask == 'effect' and '(e2,e1)' in self.y[i]):
                     pattern_to_mask = r'<e1>.*</e1>'
                     pattern_to_remove_tag = r'</?e2>'
                 else:
@@ -82,25 +69,14 @@ class DataLoader(object):
         assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
 
     def write(self, data_path):
-        # with open(data_path, 'w+') as f:
-        #     for i in self.train_idx:
-        #         f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-        #     for i in self.dev_idx:
-        #         f.write(f'va\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-        #     for i in self.test_idx:
-        #         f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-        # logging.info(f'data wrote')
-
         with open(data_path, 'w+') as f:
             for i in range(len(self.X)):
-                # print(self.y[i], self.X[i], self.causal[i])
                 f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\t{self.rel[i]}\n')
-                # f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
         logging.info(f'data wrote')
 
 
 
-logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
+# logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
 # if __name__ == '__main__':
 #     # args = get_args()
