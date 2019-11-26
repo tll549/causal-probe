@@ -15,7 +15,7 @@ PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
 SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
 SemEval_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask_processed.txt'
-SemEval_LOGS_DATAPATH = 'logs/SemEval_logs'
+SemEval_LOGS_DATAPATH = 'logs/SemEval_logs_mask.txt'
 
 class engine(object):
 	def __init__(self, params):
@@ -31,7 +31,7 @@ class engine(object):
 		self.prepare_data()
 		self.prepare_encoder()
 
-		if self.params.probing_task == 'simpel':
+		if self.params.probing_task == 'simple':
 			# not done yet
 			# self.encode()
 			return
@@ -55,19 +55,18 @@ class engine(object):
 		elif self.params.dataset == 'because':
 			fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
 
-		self.data = {'X': [], 'y': [], 'rel': []}
+		self.data = {'X_orig': [], 'y': [], 'rel': []}
 		with io.open(fpath, 'r', encoding='utf-8') as f:
 			for line in f:
 				# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
 				line = line.rstrip().split('\t')
 				self.data['y'].append(line[1])
-				self.data['X'].append(line[2])
+				self.data['X_orig'].append(line[2])
 				self.data['rel'].append(line[3])
 
-		logging.info(f'Loaded {len(self.data["X"])}')
+		logging.info(f'Loaded {len(self.data["X_orig"])}')
 
 	def prepare_data(self):
-		# print(data['X'][:3])
 		self.data['X_shuf'], self.data['X_trunc'], self.data['X_shuf_trunc'] = [], [], []
 		def tokenize_with_mask(x):
 			# x = 'eroj ewriow eio. fwiej; fweji, wdej! erijf?'
@@ -134,14 +133,14 @@ class engine(object):
 			return ' '.join(x)
 
 		np.random.seed(self.params.seed)
-		for i in range(len(self.data['X'])):
-			# print(self.data['X'][i])
+		for i in range(len(self.data['X_orig'])):
+			# print(self.data['X_orig'][i])
 
-			shuf = shuffle(self.data['X'][i])
+			shuf = shuffle(self.data['X_orig'][i])
 			self.data['X_shuf'].append(shuf)
 			# print(shuf)
 
-			trunc = truncate(self.data['X'][i])
+			trunc = truncate(self.data['X_orig'][i])
 			self.data['X_trunc'].append(trunc)
 			# print(trunc)
 
@@ -151,7 +150,7 @@ class engine(object):
 			# print()
 			# break
 		
-		# print(self.data['X'][7555])
+		# print(self.data['X_orig'][7555])
 		# print(self.data['X_shuf'][7555])
 		# print(self.data['X_trunc'][7555])
 		# print(self.data['X_shuf_trunc'][7555])
@@ -219,13 +218,13 @@ class engine(object):
 
 	def predict_mask(self):
 		logging.info('predicting...')
-		k = self.params.k
-		
-		X_types = ['X', 'X_shuf', 'X_trunc', 'X_shuf_trunc']
-		correct = {k:{X_type:[] for X_type in X_types} for k in list(set(self.data['rel']))}
+		# k = self.params.k
+		k_list = [1, 3, 5, 7, 9, 10, 20]
+		X_types = ['X_orig', 'X_shuf', 'X_trunc', 'X_shuf_trunc']
+		correct = {rel:{k:{X_type:[] for X_type in X_types} for k in k_list} for rel in list(set(self.data['rel']))}
 		self.pred = []
 		
-		for i in range(len(self.data['X'])):
+		for i in range(len(self.data['X_orig'])):
 			pred = []
 			y = self.data['y'][i]
 			rel = self.data['rel'][i]
@@ -249,7 +248,7 @@ class engine(object):
 				# print(predictions[0, masked_index].shape) # 2, 768
 				soft_pred = torch.softmax(predictions[0, masked_index], 1)
 				# print(soft_pred.shape) # 2, 768
-				top_inds = torch.argsort(soft_pred, descending=True)[:, :k].cpu().numpy()
+				top_inds = torch.argsort(soft_pred, descending=True)[:, :k_list[-1]].cpu().numpy()
 				# print(top_inds.shape) # 2, 5
 				# top_probs = [soft_pred[tgt_ind].item() for tgt_ind in top_inds]
 				top_k_preds = [self.params.tokenizer.convert_ids_to_tokens(top_inds[to_pred, :]) \
@@ -258,31 +257,41 @@ class engine(object):
 				# print(y)
 				# print()
 
-				num_correct = [y.split()[j] in top_k_preds[j] for j in range(len(masked_index))]
-				correct[rel][X_type].append(int(all(num_correct)))
+				correct_at = []
+				for j, y_j in enumerate(y.split()):
+					# print(top_k_preds[j], y_j)
+					temp = [l+1 for l in range(k_list[-1]) if top_k_preds[j][l] == y_j]
+					# print('temp', temp)
+					correct_at.append(temp[0] if temp != [] else 0)
+				# print(correct_at)
+				correct_at = max(correct_at) if min(correct_at) != 0 else 0
+				# print('correct_at', correct_at)
 
-				pred += [x, top_k_preds, all(num_correct)]
-			pred += [y, rel]
-			print(pred)
-			print()
+				for k in k_list:
+					# num_correct = [y.split()[j] in top_k_preds[j][:k] for j in range(len(masked_index))]
+					# print(int(correct_at <= k and correct_at != 0))
+					correct[rel][k][X_type].append(int(correct_at <= k and correct_at != 0))
 
+				pred += [x, top_k_preds, correct_at]
+			pred = [y, rel] + pred
 			self.pred.append(pred)
+
 			if self.params.trial:
+				print(pred)
+				print()
 				if i == 8:
 					break
-		self.acc = {k1:{k2:np.mean(v2) if v2 != [] else 0 for k2, v2 in v1.items()} for k1, v1 in correct.items()}
-		logging.info(f'acc: {self.acc}')
-		# print(self.pred[8])
+		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
+		logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
 
 	def save_pred(self, path):
 		# if self.params.trial:
 		# 	return
 
-		with open(path + f'_{self.params.k}.txt', 'w+', encoding='utf-8') as f:
+		with open(path, 'w+', encoding='utf-8') as f:
 			for l in self.pred:
-				# o = f'{l[0]}\t{str(l[1])}\t{l[2]}\t{l[3]}\t{l[4]}\n'
 				o = '\t'.join([str(x) for x in l]) + '\n'
 				f.write(o)
-		with open(path + f'_{self.params.k}_acc.txt', 'w+', encoding='utf-8') as f:
+		with open(path, 'w+', encoding='utf-8') as f:
 			for k, v in self.acc.items():
 				f.write(k + ' : ' + str(v) + '\n')
