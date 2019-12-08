@@ -8,6 +8,8 @@ import pickle
 from causal_probe import utils
 from data import SemEval_preprocess
 
+from data import feature_preprocess
+
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
@@ -33,29 +35,41 @@ class engine(object):
 	def eval(self):
 		if self.params.reset_data:
 			self.preprocess_data()
-		assert os.path.exists(self.processed_datapath), 'should preprocess data first'
-		self.load_data()
-		self.prepare_data()
-		self.prepare_encoder()
+		# assert os.path.exists(self.processed_datapath), 'should preprocess data first'
+		# self.load_data()
+		# self.prepare_data()
+		# self.prepare_encoder()
 
-		if self.params.probing_task == 'simple':
-			# not done yet
-			return
-		elif self.params.probing_task == 'mask':
-			self.predict_mask()
+		# if self.params.probing_task == 'simple':
+		# 	# not done yet
+		# 	return
+		# elif self.params.probing_task == 'mask':
+		# 	self.predict_mask()
 
-		self.save_pred(SemEval_LOGS_DATAPATH)
+		# self.save_pred(SemEval_LOGS_DATAPATH)
 
-		self.plot_acc(SemEval_LOGS_DATAPATH)
+		# self.plot_acc(SemEval_LOGS_DATAPATH)
 
 	def preprocess_data(self):
 		logging.info('preprocessing data...')
-		if self.params.dataset == 'semeval':
-			dl = SemEval_preprocess.DataLoader()
-			dl.read(SemEval_RAW_DATAPATH)
-			dl.preprocess(self.params.probing_task, mask=self.params.mask)
-			# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
-			dl.write(self.processed_datapath)
+		if self.params.probing_task == 'mask':
+			if self.params.dataset == 'semeval':
+				dl = SemEval_preprocess.DataLoader()
+				dl.read(SemEval_RAW_DATAPATH)
+				dl.preprocess(self.params.probing_task, mask=self.params.mask)
+				# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
+				dl.write(self.processed_datapath)
+		elif self.params.probing_task == 'feature':
+			dl = feature_preprocess.DataLoader()
+			if self.params.dataset == 'semeval':
+				dl.read(SemEval_RAW_DATAPATH)
+			if self.params.label_data == 'self':
+				pass
+			# else:
+			# 	dl.read_label_dataset():
+			dl.preprocess()
+			dl.calc_prob()
+
 
 	def load_data(self):
 		# if self.params.dataset == 'semeval':
