@@ -107,21 +107,21 @@ class DataLoader(object):
         self.output.to_csv(data_path, index=False)
         logging.info(f'output saved to {data_path}')
 
-    def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
-        random.seed(seed)
-        idx = list(range(len(self.X)))
-        random.shuffle(idx)
-        idx_1 = int(len(self.X) * (1-dev_prop-test_prop))
-        idx_2 = idx_1 + int(len(self.X) * dev_prop)
+    # def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
+    #     random.seed(seed)
+    #     idx = list(range(len(self.X)))
+    #     random.shuffle(idx)
+    #     idx_1 = int(len(self.X) * (1-dev_prop-test_prop))
+    #     idx_2 = idx_1 + int(len(self.X) * dev_prop)
 
-        self.train_idx = idx[:idx_1]
-        self.dev_idx = idx[idx_1:idx_2]
-        self.test_idx = idx[idx_2:]
-        logging.debug(f'data splitted, train: {len(self.train_idx)}, dev: {len(self.dev_idx)}, test: {len(self.test_idx)}')
-        assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
+    #     self.train_idx = idx[:idx_1]
+    #     self.dev_idx = idx[idx_1:idx_2]
+    #     self.test_idx = idx[idx_2:]
+    #     logging.debug(f'data splitted, train: {len(self.train_idx)}, dev: {len(self.dev_idx)}, test: {len(self.test_idx)}')
+    #     assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
 
-    def write(self, data_path):
-        with open(data_path, 'w+') as f:
-            for i in range(len(self.X)):
-                f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\t{self.rel[i]}\n')
-        logging.info(f'data wrote')
+    # def write(self, data_path):
+    #     with open(data_path, 'w+') as f:
+    #         for i in range(len(self.X)):
+    #             f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\t{self.rel[i]}\n')
+    #     logging.info(f'data wrote')

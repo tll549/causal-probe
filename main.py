@@ -296,6 +296,7 @@ if __name__ == '__main__':
         # print(result)
 
     elif args.probe == 'feature':
+        print(args.reset_data)
         params = {
             'trial': args.trial,
             'probing_task': args.probe,

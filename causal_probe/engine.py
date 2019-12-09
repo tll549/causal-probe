@@ -1,5 +1,6 @@
 import io
 import numpy as np
+import pandas as pd
 import logging
 import os
 import re
@@ -7,7 +8,6 @@ import pickle
 
 from causal_probe import utils
 from data import SemEval_preprocess
-
 from data import feature_preprocess
 
 import torch
@@ -21,6 +21,13 @@ SemEval_mask_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/
 SemEval_LOGS_DATAPATH = 'logs/'
 
 SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
+
+from datetime import *
+def to_pickle_dt(var, filename, datetime_format="%Y%m%d%H%M"):
+    datetime_now = datetime.now().strftime(datetime_format)
+    filename_dt = filename + '_' + datetime_now + '.pkl'
+    pickle.dump(var, open(filename_dt, 'wb'))
+    logging.info(f'{filename_dt} saved')
 
 
 class engine(object):
@@ -40,17 +47,22 @@ class engine(object):
 
 	def eval(self):
 		if self.params.reset_data:
-			self.preprocess_data()
-		# assert os.path.exists(self.processed_datapath), 'should preprocess data first'
-		# self.load_data()
-		# self.prepare_data()
-		# self.prepare_encoder()
+			# self.preprocess_data()
+			print('preprocess')
+		assert os.path.exists(self.processed_datapath), 'should preprocess data first'
+		self.load_data()
+		self.prepare_data()
+		self.prepare_encoder()
 
-		# if self.params.probing_task == 'simple':
-		# 	# not done yet
-		# 	return
-		# elif self.params.probing_task == 'mask':
-		# 	self.predict_mask()
+		if self.params.probing_task == 'simple':
+			# not done yet
+			return
+		elif self.params.probing_task == 'mask':
+			self.predict_mask()
+		elif self.params.probing_task == 'feature':
+			self.encode_data()
+			# self.predict_feature()
+
 
 		# self.save_pred(SemEval_LOGS_DATAPATH)
 
@@ -77,122 +89,136 @@ class engine(object):
 			dl.calc_prob()
 			dl.save_output(self.processed_datapath)
 
-
 	def load_data(self):
 		# if self.params.dataset == 'semeval':
 		# 	fpath = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask_processed.txt'
 		# elif self.params.dataset == 'because':
 		# 	fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
 
-		self.data = {'X_orig': [], 'y': [], 'rel': []}
-		with io.open(self.processed_datapath, 'r', encoding='utf-8') as f:
-			for line in f:
-				# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
-				line = line.rstrip().split('\t')
-				self.data['y'].append(line[1])
-				self.data['X_orig'].append(line[2])
-				self.data['rel'].append(line[3])
-
-		logging.info(f'Loaded {len(self.data["X_orig"])}')
+		if self.params.probing_task == 'mask':
+			self.data = {'X_orig': [], 'y': [], 'rel': []}
+			with io.open(self.processed_datapath, 'r', encoding='utf-8') as f:
+				for line in f:
+					# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
+					line = line.rstrip().split('\t')
+					self.data['y'].append(line[1])
+					self.data['X_orig'].append(line[2])
+					self.data['rel'].append(line[3])
+			logging.info(f'Loaded {len(self.data["X_orig"])}')
+		elif self.params.probing_task == 'feature':
+			self.data = pd.read_csv(self.processed_datapath)
+			logging.info(f'Loaded {self.data.shape}')
 
 	def prepare_data(self):
-		self.data['X_shuf'], self.data['X_trunc'], self.data['X_shuf_trunc'] = [], [], []
-		def tokenize_with_mask(x):
-			# x = 'eroj ewriow eio. fwiej; fweji, wdej! erijf?'
-			# print(x)
-			x = re.sub(r'([.,!?;])', r' \1', x) # replace sth like '.' to ' .'
-			# print(x)
-			x = x.split()
-			# print(x)
-			# separate like [MASK]. to [MASK] .
-			# mask_index = [i for i in range(len(x)) if '[MASK]' in x[i] and x[i] != '[MASK]']
-			# for i in mask_index:
-			# 	x.insert(i+1, re.sub(r'\[MASK\]', '', x[i]))
-			# 	x[i] = '[MASK]'
-			# period = x[-2][-1]
-			# x[-2] = x[-2][:-1]
-			# x.insert(-1, period)
+		if self.params.probing_task == 'mask':
+			self.data['X_shuf'], self.data['X_trunc'], self.data['X_shuf_trunc'] = [], [], []
+			def tokenize_with_mask(x):
+				# x = 'eroj ewriow eio. fwiej; fweji, wdej! erijf?'
+				# print(x)
+				x = re.sub(r'([.,!?;])', r' \1', x) # replace sth like '.' to ' .'
+				# print(x)
+				x = x.split()
+				# print(x)
+				# separate like [MASK]. to [MASK] .
+				# mask_index = [i for i in range(len(x)) if '[MASK]' in x[i] and x[i] != '[MASK]']
+				# for i in mask_index:
+				# 	x.insert(i+1, re.sub(r'\[MASK\]', '', x[i]))
+				# 	x[i] = '[MASK]'
+				# period = x[-2][-1]
+				# x[-2] = x[-2][:-1]
+				# x.insert(-1, period)
 
-			# print(x)
-			# join like [MASK] [MASK]
-			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
-			x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
-			return x
-		def shuffle(x):
-			'''shuffle everything except [CLS], last character (period), [SEP]'''
-			x = tokenize_with_mask(x)
-			# print(x)
-			start_token, end_token, period = x.pop(0), x.pop(), x.pop()
-			# print(x)
-			np.random.shuffle(x)
-			# x[-1] = x[-1] + period
-			x = [start_token] + x + [period, end_token]
-			# print(x)
-			# print(' '.join(x))
-			# print()
-			return ' '.join(x)
-		def truncate(x):
-			'''truncate the sentence to A B [MASK] C D, or A B C D [MASK], etc'''
-			x = tokenize_with_mask(x)
-			start_token, end_token = x.pop(0), x.pop()
-			mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
-			# assert mask_index[-1] - mask_index[0] == len(mask_index) - 1, 'masks should be neighbor'
+				# print(x)
+				# join like [MASK] [MASK]
+				mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
+				x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
+				return x
+			def shuffle(x):
+				'''shuffle everything except [CLS], last character (period), [SEP]'''
+				x = tokenize_with_mask(x)
+				# print(x)
+				start_token, end_token, period = x.pop(0), x.pop(), x.pop()
+				# print(x)
+				np.random.shuffle(x)
+				# x[-1] = x[-1] + period
+				x = [start_token] + x + [period, end_token]
+				# print(x)
+				# print(' '.join(x))
+				# print()
+				return ' '.join(x)
+			def truncate(x):
+				'''truncate the sentence to A B [MASK] C D, or A B C D [MASK], etc'''
+				x = tokenize_with_mask(x)
+				start_token, end_token = x.pop(0), x.pop()
+				mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
+				# assert mask_index[-1] - mask_index[0] == len(mask_index) - 1, 'masks should be neighbor'
+				
+				keep = 2
+				# print(mask_index)
+				start_idx, end_idx = mask_index[0]-keep, mask_index[-1]+keep
+				# print(start_idx, end_idx)
+				if start_idx < 0:
+					end_idx += -start_idx
+					start_idx = 0
+				elif end_idx >= len(x):
+					# print(end_idx, len(x))
+					start_idx -= end_idx - len(x) + 1
+					start_idx = 0 if start_idx < 0 else start_idx
+				# print(start_idx, end_idx)
+				# print()
+				x = x[start_idx:end_idx+1]
+				# period = x.pop()
+				# x[-1] += period
+				x = [start_token] + x + [end_token]
+				# print(x)
+				# ignore this restriction when the sentence is short, or when mask is not in neighbor (after shuffle)
+				if len(x) > 6 and mask_index[-1] - mask_index[0] == len(mask_index) - 1: 
+					assert len(x) == 2 + len(mask_index) + keep*2
+				return ' '.join(x)
+
+			np.random.seed(self.params.seed)
+			for i in range(len(self.data['X_orig'])):
+				# print(self.data['X_orig'][i])
+
+				shuf = shuffle(self.data['X_orig'][i])
+				self.data['X_shuf'].append(shuf)
+				# print(shuf)
+
+				trunc = truncate(self.data['X_orig'][i])
+				self.data['X_trunc'].append(trunc)
+				# print(trunc)
+
+				shuf_trunc = truncate(shuf)
+				self.data['X_shuf_trunc'].append(shuf_trunc)
+				# print(shuf_trunc)
+				# print()
+				# break
 			
-			keep = 2
-			# print(mask_index)
-			start_idx, end_idx = mask_index[0]-keep, mask_index[-1]+keep
-			# print(start_idx, end_idx)
-			if start_idx < 0:
-				end_idx += -start_idx
-				start_idx = 0
-			elif end_idx >= len(x):
-				# print(end_idx, len(x))
-				start_idx -= end_idx - len(x) + 1
-				start_idx = 0 if start_idx < 0 else start_idx
-			# print(start_idx, end_idx)
-			# print()
-			x = x[start_idx:end_idx+1]
-			# period = x.pop()
-			# x[-1] += period
-			x = [start_token] + x + [end_token]
-			# print(x)
-			# ignore this restriction when the sentence is short, or when mask is not in neighbor (after shuffle)
-			if len(x) > 6 and mask_index[-1] - mask_index[0] == len(mask_index) - 1: 
-				assert len(x) == 2 + len(mask_index) + keep*2
-			return ' '.join(x)
+			# print(self.data['X_orig'][7555])
+			# print(self.data['X_shuf'][7555])
+			# print(self.data['X_trunc'][7555])
+			# print(self.data['X_shuf_trunc'][7555])
 
-		np.random.seed(self.params.seed)
-		for i in range(len(self.data['X_orig'])):
-			# print(self.data['X_orig'][i])
-
-			shuf = shuffle(self.data['X_orig'][i])
-			self.data['X_shuf'].append(shuf)
-			# print(shuf)
-
-			trunc = truncate(self.data['X_orig'][i])
-			self.data['X_trunc'].append(trunc)
-			# print(trunc)
-
-			shuf_trunc = truncate(shuf)
-			self.data['X_shuf_trunc'].append(shuf_trunc)
-			# print(shuf_trunc)
-			# print()
-			# break
-		
-		# print(self.data['X_orig'][7555])
-		# print(self.data['X_shuf'][7555])
-		# print(self.data['X_trunc'][7555])
-		# print(self.data['X_shuf_trunc'][7555])
+		elif self.params.probing_task == 'feature':
+			# print(self.data.columns)
+			self.backup_data = self.data.copy()
+			self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 
+				'c_e_count', 'e_no_c_count', 'p', 'q', 'causal_power'])
+			self.y_list = self.data.columns.tolist()[2:] # ignore X and relation
+			# print(self.data.columns)
 
 	def prepare_encoder(self):
-		logging.info('preparing...')
+		logging.info('preparing encoder...')
 		params = self.params
 
 		if params.pretrained.model == 'bert':
 			bert_type = f'bert-{params.pretrained.model_type}-{"cased" if params.pretrained.cased else "uncased"}'
 			logging.getLogger('transformers').setLevel(logging.ERROR)
 			params.tokenizer = BertTokenizer.from_pretrained(bert_type)
-			params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
+			if self.params.probing_task == 'mask':
+				params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
+			elif self.params.probing_task == 'feature':
+				params.encoder = BertModel.from_pretrained('bert-base-uncased')
 			params.encoder.eval() # ??
 
 		elif params.pretrained.model == 'glove':
@@ -244,6 +270,28 @@ class engine(object):
 			logging.debug(f'word2vec: {params.word_vec["book"][:5]}') # 300
 
 		logging.info('prepared')
+
+	def encode_data(self):
+		logging.info('encoding data...')
+		hidden_size = self.params.encoder.config.hidden_size
+		self.embeddings = torch.zeros(self.data.shape[0], hidden_size)
+		for i in range(len(self.data.X)):
+			x = '[CLS] ' + self.data.X[i] + ' [SEP]'
+
+			tokenized_text = self.params.tokenizer.tokenize(x)
+			indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
+			tokens_tensor = torch.tensor([indexed_tokens])
+
+			with torch.no_grad():
+				outputs = self.params.encoder(tokens_tensor)
+				encoded_layers = outputs[0]
+
+			self.embeddings[i, :] = torch.mean(encoded_layers, dim=1)
+			# print(encoded_layers.shape)
+			# break
+
+		to_pickle_dt(self.embeddings, 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings')
+		logging.info(f'data encoded, embeddings shape: {self.embeddings.shape}')
 
 	def predict_mask(self):
 		logging.info('predicting...')
@@ -312,6 +360,27 @@ class engine(object):
 					break
 		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
 		logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
+
+	def predict_feature(self):
+		from sklearn.model_selection import cross_validate
+		from sklearn.metrics import confusion_matrix
+		from sklearn.linear_model import LogisticRegression
+
+		for rel in self.data.relation.unique():
+			print(rel, X.shape, y.shape)
+			for y_name in self.y_list:
+				X = self.data.loc[self.data.relation == rel, 'X']
+				y = self.data.loc[self.data.relation == rel, y_name]
+
+				print(y.name, y.dtype)
+				if y.dtype == 'bool':
+					clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
+
+					# cv_results = cross_validate(clf, X, y, cv=3, error_score='raise')
+				elif 'float' in y.dtype:
+					pass
+				# break
+			break
 
 	def save_pred(self, path):
 		with open(path + 'result' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
