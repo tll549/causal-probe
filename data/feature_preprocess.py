@@ -93,7 +93,7 @@ class DataLoader(object):
                 P_of_E_given_C, P_of_E, probabilistic_causality, probabilistic_causality_diff,
                 delta_P, P_E_given_no_C, q, p, causal_power]
             # if i > 9:
-            #     break
+            #     break 
 
         def MinMaxScaler(x):
             return (x - x.min()) / (x.max() - x.min())
