@@ -17,8 +17,11 @@ from transformers import BertTokenizer, BertModel, BertForMaskedLM
 PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
 SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
-SemEval_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask'
+SemEval_mask_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask'
 SemEval_LOGS_DATAPATH = 'logs/'
+
+SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
+
 
 class engine(object):
 	def __init__(self, params):
@@ -26,7 +29,10 @@ class engine(object):
 		self.params.pretrained = utils.dotdict(self.params.pretrained)
 		logging.info('params: ' + str(self.params))
 
-		self.processed_datapath = SemEval_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
+		if self.params.probing_task == 'mask':
+			self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
+		elif self.params.probing_task == 'feature':
+			self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
 		self.last_filename = '{}_{}_{}_{}_{}'.format(
 			'_TRIAL' if self.params.trial else '',
 			self.params.dataset, self.params.probing_task, 
@@ -69,6 +75,7 @@ class engine(object):
 			# 	dl.read_label_dataset():
 			dl.preprocess()
 			dl.calc_prob()
+			dl.save_output(self.processed_datapath)
 
 
 	def load_data(self):
