@@ -38,8 +38,6 @@ def get_args():
                         help='path to datasets')
     parser.add_argument('-output_path', type=str, default='',
                         help='path to output results')
-    # parser.add_argument('-seed', type=int, default=0,
-    #                     help='Random seed (default: 0)')
 
     # model settings
     parser.add_argument('-model', type=str, default='bert', 
@@ -54,6 +52,9 @@ def get_args():
                         help='span average/span difference')
     parser.add_argument('-cased', action='store_true', help='set cased to be true')
     parser.add_argument('-fine_tune', action='store_true', help='fine tune')
+
+    parser.add_argument('-both_bert_glove', type=int, default=1,
+        help='')
 
     # Model configuration
     parser.add_argument('-batch_size', type=int, default=128,
@@ -85,8 +86,8 @@ def get_args():
 
 
     # probing task
-    parser.add_argument('-trial', type=bool, default=False,
-        help='')
+    parser.add_argument('-trial', type=int, default=0,
+        help='bool (0 or 1)')
     parser.add_argument('-probe', type=str, default='simple',
         choices=['simple', 'mask', 'choice', 'feature'],
         help='types of probing task, (simpel causal, predict masked, choose between two choises)')
@@ -96,12 +97,20 @@ def get_args():
     parser.add_argument('-label_data', type=str, default='semeval',
         choices=['semeval'],
         help='')
-    parser.add_argument('-reset_data', type=bool, default=False,
-        help='')
+    parser.add_argument('-reset_data', type=int, default=0,
+        help='bool')
     parser.add_argument('-seed', type=int, default=555)
     parser.add_argument('-mask', type=str, default='cause',
         choices=['cause', 'effect'],
         help='')
+
+    parser.add_argument('-cv', type=int, default=5,
+        help='number of folds to cross validation')
+    parser.add_argument('-num_classes', type=int, default=5,
+        help='number of classes to divide float target variable to')
+    parser.add_argument('-num_classes_by', type=str, default='quantile',
+        choices=['linear', 'quantile'],
+        help='how to divide numerical target variables to classes (default: quantile), linear will cause imbalance data')
 
     return parser.parse_args()
 
@@ -250,7 +259,7 @@ def batcher(params, batch):
 
 if __name__ == '__main__':
     args = get_args()
-    # logging.debug(args)
+    logging.debug(args)
 
     if args.probe == 'simple':
         # par settings from lingyu
@@ -296,7 +305,6 @@ if __name__ == '__main__':
         # print(result)
 
     elif args.probe == 'feature':
-        print(args.reset_data)
         params = {
             'trial': args.trial,
             'probing_task': args.probe,
@@ -307,9 +315,14 @@ if __name__ == '__main__':
             'pretrained': {
                 'model': args.model,
                 'model_type': args.model_type,
-                'cased': args.cased
+                'cased': args.cased,
+
+                'both_bert_glove': args.both_bert_glove
             },
-            'mask': args.mask
+            'cv': args.cv,
+            'num_classes': args.num_classes,
+            'num_classes_by': args.num_classes_by
         }
+        # print(params)
         ce = causal_probe.engine(params)
         result = ce.eval()

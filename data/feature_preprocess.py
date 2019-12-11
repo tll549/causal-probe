@@ -4,6 +4,8 @@ import random
 import numpy as np
 import pandas as pd
 
+from causal_probe import utils
+
 class DataLoader(object):
     def __init__(self):
         self.X, self.y = [], []
@@ -22,7 +24,7 @@ class DataLoader(object):
                         next_is_y = False
         logging.debug(f'loaded X len: {len(self.X)}')
 
-    def preprocess(self):
+    def preprocess(self, trial=False):
         all_relations_dict = {k:re.sub(r'\(e\d,e\d\)', '', k) for k in list(set(self.y))}
 
         X, y = [], []
@@ -40,6 +42,10 @@ class DataLoader(object):
             x = re.sub(r'</?e\d>', '', self.X[i])[1:-1]
             X.append(x)
 
+            if trial:
+                if i >= 9:
+                    break
+
         self.X= X
         self.sub, self.obj = sub, obj
 
@@ -51,7 +57,8 @@ class DataLoader(object):
             handled_punct = [re.sub(r'([.,!?;])', r' \1', x) for x in X]
             return [[x2.lower() for x2 in x.split()] for x in handled_punct]
         tok = tokenize(self.X)
-        num_words = len(set([w for sent in tok for w in sent]))
+        # num_words = len(set([w for sent in tok for w in sent])) # can't use this, causes negative in prob causality diff because P(E|C) is counting by sentences, not by words
+        num_sent = len(self.X)
 
         logging.info(f'calculating features')
         self.output = pd.DataFrame(columns=[
@@ -71,12 +78,13 @@ class DataLoader(object):
 
             # probabilistic causality
             P_of_E_given_C = c_e_count / c_count
-            P_of_E = e_count / num_words
+            P_of_E = e_count / num_sent
             probabilistic_causality = P_of_E_given_C >= P_of_E
             probabilistic_causality_diff = P_of_E_given_C - P_of_E
+            # assert probabilistic_causality_diff > 0, f'{P_of_E_given_C}, {P_of_E}, {c_e_count}, {c_count}, {e_count}'
 
             # delta P
-            P_E_given_no_C = e_no_c_count / (num_words - c_count)
+            P_E_given_no_C = e_no_c_count / (num_sent - c_count)
             delta_P = P_of_E_given_C - P_E_given_no_C
 
             # causal power
@@ -92,36 +100,43 @@ class DataLoader(object):
                 c_count, e_count, c_e_count, e_no_c_count, causal_dependency,
                 P_of_E_given_C, P_of_E, probabilistic_causality, probabilistic_causality_diff,
                 delta_P, P_E_given_no_C, q, p, causal_power]
-            # if i > 9:
+            # if i > 10:
             #     break 
 
-        def MinMaxScaler(x):
-            return (x - x.min()) / (x.max() - x.min())
-        self.output['q_scaled'] = MinMaxScaler(self.output.q)
-        self.output['p_scaled'] = MinMaxScaler(self.output.p)
-        self.output['causal_power_scaled'] = MinMaxScaler(self.output.causal_power)
+        # def MinMaxScaler(x):
+        #     if x.max() - x.min() == 0:
+        #         return x
+        #     return (x - x.min()) / (x.max() - x.min())
+        # self.output['probabilistic_causality_diff'] = MinMaxScaler(self.output.probabilistic_causality_diff)
+        # self.output['q_scaled'] = MinMaxScaler(self.output.q)
+        # self.output['p_scaled'] = MinMaxScaler(self.output.p)
+        # self.output['causal_power_scaled'] = MinMaxScaler(self.output.causal_power)
 
         logging.info(f'features calculated for {self.output.shape[0]} sentences')
 
+    def make_categorical(self, num_classes, num_classes_by, numerical_columns):
+        '''make each numerical variables in each relation categorical'''
+        def float_categorize(s, num_classes, by):
+            '''s should be numerical pd.series'''
+            if by == 'linear':  
+                s = ((s - s.min()) / ((s.max() - s.min()) / num_classes)).astype(int)
+                s[s == num_classes] = num_classes - 1
+                return s
+            elif by == 'quantile':
+                return pd.qcut(s, num_classes, labels=False)
+        for c in numerical_columns:
+            for rel in self.output.relation.unique():
+                try:
+                    self.output.loc[self.output.relation==rel, c + '_cat'] = \
+                        float_categorize(pd.to_numeric(self.output.loc[self.output.relation==rel, c]), 
+                            num_classes, num_classes_by)
+                except ValueError:
+                    print(f'{c}, {rel}, this combination will be dropped later, ValueError: Bin edges must be unique')
+                # assert self.output[c].nunique() <= num_classes, f'more than {num_classes} classes'
+        # remove incomplete cases caused from above
+        self.output = self.output.dropna()
+
     def save_output(self, data_path):
-        self.output.to_csv(data_path, index=False)
-        logging.info(f'output saved to {data_path}')
-
-    # def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
-    #     random.seed(seed)
-    #     idx = list(range(len(self.X)))
-    #     random.shuffle(idx)
-    #     idx_1 = int(len(self.X) * (1-dev_prop-test_prop))
-    #     idx_2 = idx_1 + int(len(self.X) * dev_prop)
-
-    #     self.train_idx = idx[:idx_1]
-    #     self.dev_idx = idx[idx_1:idx_2]
-    #     self.test_idx = idx[idx_2:]
-    #     logging.debug(f'data splitted, train: {len(self.train_idx)}, dev: {len(self.dev_idx)}, test: {len(self.test_idx)}')
-    #     assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
-
-    # def write(self, data_path):
-    #     with open(data_path, 'w+') as f:
-    #         for i in range(len(self.X)):
-    #             f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\t{self.rel[i]}\n')
-    #     logging.info(f'data wrote')
+        # self.output.to_csv(data_path, index=False)
+        utils.save_dt(self.output, data_path)
+        # logging.info(f'output saved to {data_path}')

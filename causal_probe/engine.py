@@ -14,6 +14,9 @@ import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
 SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
@@ -21,13 +24,7 @@ SemEval_mask_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/
 SemEval_LOGS_DATAPATH = 'logs/'
 
 SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
-
-from datetime import *
-def to_pickle_dt(var, filename, datetime_format="%Y%m%d%H%M"):
-    datetime_now = datetime.now().strftime(datetime_format)
-    filename_dt = filename + '_' + datetime_now + '.pkl'
-    pickle.dump(var, open(filename_dt, 'wb'))
-    logging.info(f'{filename_dt} saved')
+SemEval_feature_ENCODED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings.pkl'
 
 
 class engine(object):
@@ -40,6 +37,15 @@ class engine(object):
 			self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
 		elif self.params.probing_task == 'feature':
 			self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
+
+			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
+				# 'probabilistic_causality', 
+				'probabilistic_causality_diff', 
+				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power']
+			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
+				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power']
+			self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
+
 		self.last_filename = '{}_{}_{}_{}_{}'.format(
 			'_TRIAL' if self.params.trial else '',
 			self.params.dataset, self.params.probing_task, 
@@ -47,26 +53,53 @@ class engine(object):
 
 	def eval(self):
 		if self.params.reset_data:
-			# self.preprocess_data()
-			print('preprocess')
-		assert os.path.exists(self.processed_datapath), 'should preprocess data first'
+			self.preprocess_data()
+		# assert os.path.exists(self.processed_datapath), 'should preprocess data first'
 		self.load_data()
 		self.prepare_data()
 		self.prepare_encoder()
 
 		if self.params.probing_task == 'simple':
 			# not done yet
-			return
+			pass
+
 		elif self.params.probing_task == 'mask':
 			self.predict_mask()
+			self.save_pred(SemEval_LOGS_DATAPATH)
+			self.plot_acc(SemEval_LOGS_DATAPATH)
+
 		elif self.params.probing_task == 'feature':
-			self.encode_data()
-			# self.predict_feature()
 
+			if self.params.pretrained.model == 'bert': # or both
+				if self.params.reset_data:
+					self.encode_data_bert(SemEval_feature_ENCODED_DATAPATH)
+				else:
+					self.load_encoded_data(SemEval_feature_ENCODED_DATAPATH)
+				logging.info('start predicting by bert...')
+				self.predict_feature(cv=self.params.cv)
 
-		# self.save_pred(SemEval_LOGS_DATAPATH)
+				self.result['model'] = 'bert'
+				self.result_bert_glove = self.result.copy()
 
-		# self.plot_acc(SemEval_LOGS_DATAPATH)
+			if self.params.pretrained.model == 'glove' or self.params.pretrained.both_bert_glove:
+				# if self.params.reset_data:
+				self.encode_data_glove(SemEval_feature_ENCODED_DATAPATH)
+				# else:
+				# 	self.load_encoded_data(SemEval_feature_ENCODED_DATAPATH)
+
+				logging.info('start predicting by glove...')
+				self.predict_feature(cv=self.params.cv)
+
+				self.result['model'] = 'glove'
+				try:
+					self.result_bert_glove = self.result_bert_glove.append(self.result, ignore_index=True)
+				except:
+					self.result_bert_glove = self.result
+
+			utils.save_dt(self.result_bert_glove, SemEval_LOGS_DATAPATH + 'semeval_feature_result.csv')
+
+			self.plot_acc_f1(SemEval_LOGS_DATAPATH + 'semeval_feature_result.csv')
+
 
 	def preprocess_data(self):
 		logging.info('preprocessing data...')
@@ -85,8 +118,10 @@ class engine(object):
 				pass
 			# else:
 			# 	dl.read_label_dataset():
-			dl.preprocess()
+			dl.preprocess(trial=self.params.trial)
 			dl.calc_prob()
+			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
+				self.numerical_columns)
 			dl.save_output(self.processed_datapath)
 
 	def load_data(self):
@@ -106,7 +141,8 @@ class engine(object):
 					self.data['rel'].append(line[3])
 			logging.info(f'Loaded {len(self.data["X_orig"])}')
 		elif self.params.probing_task == 'feature':
-			self.data = pd.read_csv(self.processed_datapath)
+			# self.data = pd.read_csv(self.processed_datapath)
+			self.data = utils.load_newest(self.processed_datapath)
 			logging.info(f'Loaded {self.data.shape}')
 
 	def prepare_data(self):
@@ -200,18 +236,18 @@ class engine(object):
 			# print(self.data['X_shuf_trunc'][7555])
 
 		elif self.params.probing_task == 'feature':
-			# print(self.data.columns)
 			self.backup_data = self.data.copy()
-			self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 
-				'c_e_count', 'e_no_c_count', 'p', 'q', 'causal_power'])
-			self.y_list = self.data.columns.tolist()[2:] # ignore X and relation
-			# print(self.data.columns)
+			# self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
+			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
+			self.data = self.data[use_cols]
+			self.data.columns = ['X', 'relation'] + self.all_target_columns
+			# print(self.data.head())
 
 	def prepare_encoder(self):
 		logging.info('preparing encoder...')
 		params = self.params
 
-		if params.pretrained.model == 'bert':
+		if params.pretrained.model == 'bert': # no need or params.pretrained.both_bert_glove
 			bert_type = f'bert-{params.pretrained.model_type}-{"cased" if params.pretrained.cased else "uncased"}'
 			logging.getLogger('transformers').setLevel(logging.ERROR)
 			params.tokenizer = BertTokenizer.from_pretrained(bert_type)
@@ -221,9 +257,12 @@ class engine(object):
 				params.encoder = BertModel.from_pretrained('bert-base-uncased')
 			params.encoder.eval() # ??
 
-		elif params.pretrained.model == 'glove':
+		if params.pretrained.model == 'glove' or params.pretrained.both_bert_glove:
 			# from senteval
-			samples = self.data['train']['X'] + self.data['dev']['X'] + self.data['test']['X']
+			if 'train' in self.data:
+				samples = self.data['train']['X'] + self.data['dev']['X'] + self.data['test']['X']
+			else:
+				samples = self.data['X']
 			samples = [s.split() for s in samples]
 			# Create dictionary
 			def create_dictionary(sentences, threshold=0):
@@ -271,8 +310,9 @@ class engine(object):
 
 		logging.info('prepared')
 
-	def encode_data(self):
+	def encode_data_bert(self, save_path):
 		logging.info('encoding data...')
+
 		hidden_size = self.params.encoder.config.hidden_size
 		self.embeddings = torch.zeros(self.data.shape[0], hidden_size)
 		for i in range(len(self.data.X)):
@@ -288,10 +328,37 @@ class engine(object):
 
 			self.embeddings[i, :] = torch.mean(encoded_layers, dim=1)
 			# print(encoded_layers.shape)
-			# break
 
-		to_pickle_dt(self.embeddings, 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings')
+			if self.params.trial:
+				break
+		self.embeddings = self.embeddings.numpy()
+
+		utils.save_dt(self.embeddings, save_path)
 		logging.info(f'data encoded, embeddings shape: {self.embeddings.shape}')
+
+	def encode_data_glove(self, save_path):
+		params = self.params
+
+		self.embeddings = []
+		for sent in self.data.X:
+			sentvec = []
+			for word in sent:
+				if word in params.word_vec:
+					sentvec.append(params.word_vec[word])
+			if not sentvec:
+				vec = np.zeros(params.wvec_dim)
+				sentvec.append(vec)
+			sentvec = np.mean(sentvec, 0)
+			self.embeddings.append(sentvec)
+
+		self.embeddings = np.vstack(self.embeddings)
+		# print(embeddings.shape) # (128, 300)
+		# print(embeddings)
+		return self.embeddings
+
+	def load_encoded_data(self, save_path):
+		self.embeddings = utils.load_newest(save_path)
+		logging.info(f'loaded, embeddings shape {self.embeddings.shape}')
 
 	def predict_mask(self):
 		logging.info('predicting...')
@@ -361,26 +428,60 @@ class engine(object):
 		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
 		logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
 
-	def predict_feature(self):
+	def predict_feature(self, cv):
 		from sklearn.model_selection import cross_validate
-		from sklearn.metrics import confusion_matrix
 		from sklearn.linear_model import LogisticRegression
 
+		from sklearn.utils.testing import ignore_warnings
+		from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
+
+		import warnings
+		warnings.filterwarnings("ignore", category=FutureWarning)
+		warnings.filterwarnings("ignore", category=ConvergenceWarning)
+		warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+
+		result = []
 		for rel in self.data.relation.unique():
-			print(rel, X.shape, y.shape)
-			for y_name in self.y_list:
-				X = self.data.loc[self.data.relation == rel, 'X']
+			for y_name in self.all_target_columns:
+				X = self.embeddings[np.array(self.data.relation == rel), :]
 				y = self.data.loc[self.data.relation == rel, y_name]
+				if y.nunique() == 1:
+					print(rel, y_name, 'y are all', y.iloc[0])
+					continue
+				if any(y.value_counts() <= 5):
+					print(f'{rel}, {y_name} y doesnt have enough sample in one of the classes')
+					print(y.value_counts())
+					print()
+					continue
+				y = np.array(y)
+				# print(rel, X.shape, y.shape, y_name)
 
-				print(y.name, y.dtype)
-				if y.dtype == 'bool':
-					clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
+				clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
 
-					# cv_results = cross_validate(clf, X, y, cv=3, error_score='raise')
-				elif 'float' in y.dtype:
-					pass
+				if len(np.unique(y)) == 2:
+					scoring = ('accuracy', 'balanced_accuracy', 'f1', 
+						'precision', 'recall', 'roc_auc')
+				else:
+					scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted', 
+						# 'roc_auc_ovr', 'roc_auc_ovo', 'roc_auc_ovr_weighted', 'roc_auc_ovo_weighted'
+						)
+				# print(type(X), type(y))
+				cv_results = cross_validate(clf, X, y, cv=cv, error_score='raise',
+					scoring=scoring) # error_score=np.nan
+				clf.fit(X, y)
+
+				# print(cv_results)
+				result_temp = {k:cv_results[f'test_{k}'].mean() for k in scoring}
+				result_temp.update({'relation': rel, 'y_type': y_name})
+
+				result.append(result_temp)
 				# break
-			break
+			# break
+		self.result = pd.DataFrame(result)
+		# to_move = ['relation', 'y_type']
+		# result = result[['relation', 'y_type'] + result.columns.tolist().remove(['relation', 'y_type'])]
+		
+		# utils.save_dt(result, index=False)
 
 	def save_pred(self, path):
 		with open(path + 'result' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
@@ -399,9 +500,6 @@ class engine(object):
 		logging.info('files saved')
 
 	def plot_acc(self, path):
-		import pandas as pd
-		import seaborn as sns
-
 		with open(path + 'acc' + self.last_filename + '.pkl', 'rb') as f:
 			acc = pickle.load(f)
 		
@@ -421,3 +519,28 @@ class engine(object):
 				dpi=600, bbox_inches='tight')
 
 		logging.info('fig saved')
+
+	def plot_acc_f1(self, result_path):
+		d = utils.load_newest(result_path)
+
+		# merge f1 and f1_weighted to f1
+		d['f1_binary'] = d.f1
+		d.loc[d.f1.isnull(), 'f1'] = d.loc[d.f1.isnull(), 'f1_weighted']
+
+		def plot_metric(d, metric, only_causal):
+			d = d[d.relation == 'Cause-Effect'] if only_causal else d
+			g = sns.catplot(y=metric, x='y_type', hue='model', col='relation', 
+				col_wrap=3, data=d, kind='bar')
+			for ax in g.axes.flat: 
+				for label in ax.get_xticklabels():
+					label.set_rotation(45)
+					label.set_ha('right')
+			filename = SemEval_LOGS_DATAPATH + f'fig_{self.params.dataset}_{self.params.probing_task}_{metric}_{'causal' if only_causal}_{self.params.seed}.png'
+			# plt.savefig(filename, dpi=600, bbox_inches='tight')
+			utils.save_dt(plt, filename, dpi=600, bbox_inches='tight')
+		plot_metric(d, 'f1', False)
+		plot_metric(d, 'balanced_accuracy', False)
+		plot_metric(d, 'f1', True)
+		plot_metric(d, 'balanced_accuracy', True)
+
+		# logging.info(f'{filename} saved')

@@ -24,16 +24,16 @@ def to_pickle_dt(var, filename, datetime_format="%Y%m%d%H%M"):
 #     if verbose:
 #         print(f'    done. {filename_dt} saved')
 
-# import os
-# import re
-# def find_newest(filename, verbose=1):
-#     if '/' in filename:
-#         filename_split = filename.split('/')
-#         path = '/'.join(filename_split[:-1]) + '/'
-#         filename_last = filename_split[-1]
-#     else:
-#         path = '.'
-#         filename_last = filename
+import os
+import re
+def find_newest(filename):
+    if '/' in filename:
+        filename_split = filename.split('/')
+        path = '/'.join(filename_split[:-1]) + '/'
+        filename_last = filename_split[-1]
+    else:
+        path = '.'
+        filename_last = filename
     
 #     filename_split = filename_last.split('.')
 #     filename_last = '.'.join(filename_split[:-1])
