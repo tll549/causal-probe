@@ -528,19 +528,19 @@ class engine(object):
 		d.loc[d.f1.isnull(), 'f1'] = d.loc[d.f1.isnull(), 'f1_weighted']
 
 		def plot_metric(d, metric, only_causal):
-			d = d[d.relation == 'Cause-Effect'] if only_causal else d
-			g = sns.catplot(y=metric, x='y_type', hue='model', col='relation', 
-				col_wrap=3, data=d, kind='bar')
+			if not only_causal:
+				g = sns.catplot(y=metric, x='y_type', hue='model', col='relation', col_wrap=3, data=d, kind='bar')
+			else:
+				g = sns.catplot(y=metric, x='y_type', hue='model', data=d[d.relation == 'Cause-Effect'], kind='bar')
 			for ax in g.axes.flat: 
 				for label in ax.get_xticklabels():
 					label.set_rotation(45)
 					label.set_ha('right')
-			filename = SemEval_LOGS_DATAPATH + f'fig_{self.params.dataset}_{self.params.probing_task}_{metric}_{'causal' if only_causal}_{self.params.seed}.png'
+			filename = SemEval_LOGS_DATAPATH + f'fig_{self.params.dataset}_{self.params.probing_task}_{metric}{"_causal" if only_causal else ""}_{self.params.seed}.png'
 			# plt.savefig(filename, dpi=600, bbox_inches='tight')
+			# plt.show()
 			utils.save_dt(plt, filename, dpi=600, bbox_inches='tight')
 		plot_metric(d, 'f1', False)
 		plot_metric(d, 'balanced_accuracy', False)
 		plot_metric(d, 'f1', True)
 		plot_metric(d, 'balanced_accuracy', True)
-
-		# logging.info(f'{filename} saved')

@@ -56,14 +56,12 @@ def save_dt(var, path_name_ext, datetime_format="%y%m%d%H%M", **kwargs):
 		with open(path_name_dt_ext, 'wb') as f:
 			pickle.dump(var, f)
 	elif ext == '.csv':
-		if isinstance(var, pd.DataFrame):
-			var.to_csv(path_name_dt_ext, **kwargs)
-		else:
-			print('not handled')
+		assert isinstance(var, pd.DataFrame), 'not handled'
+		var.to_csv(path_name_dt_ext, **kwargs)
 	elif ext == '.png':
 		var.savefig(path_name_dt_ext, **kwargs)
 	else:
-		print('not handled')
+		assert False, 'not handled'
 
 	logging.info(f'{path_name_dt_ext} saved')
 
