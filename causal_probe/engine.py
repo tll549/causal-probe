@@ -26,6 +26,7 @@ SemEval_LOGS_DATAPATH = 'logs/'
 SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
 SemEval_feature_ENCODED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings.pkl'
 
+OANC_DATAPATH = 'data/causal_probing/OANC_GrAF.zip'
 
 class engine(object):
 	def __init__(self, params):
@@ -54,7 +55,7 @@ class engine(object):
 	def eval(self):
 		if self.params.reset_data:
 			self.preprocess_data()
-		# assert os.path.exists(self.processed_datapath), 'should preprocess data first'
+			
 		self.load_data()
 		self.prepare_data()
 		self.prepare_encoder()
@@ -114,12 +115,14 @@ class engine(object):
 			dl = feature_preprocess.DataLoader()
 			if self.params.dataset == 'semeval':
 				dl.read(SemEval_RAW_DATAPATH)
-			if self.params.label_data == 'self':
-				pass
 			# else:
 			# 	dl.read_label_dataset():
 			dl.preprocess(trial=self.params.trial)
-			dl.calc_prob()
+			if self.params.label_data == 'semeval':
+				dl.calc_prob()
+			elif self.params.label_data == 'oanc':
+				dl.calc_prob_oanc(OANC_DATAPATH)
+
 			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
 				self.numerical_columns)
 			dl.save_output(self.processed_datapath)
@@ -426,7 +429,7 @@ class engine(object):
 				if i == 8:
 					break
 		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
-		logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
+		# logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
 
 	def predict_feature(self, cv):
 		from sklearn.model_selection import cross_validate

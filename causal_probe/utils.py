@@ -14,6 +14,20 @@ import logging
 import pickle
 
 
+class ProgressBar(object):
+    def __init__(self, n_itr):
+        self.n_itr = n_itr
+    def now(self, i):
+        if self.n_itr > 50:
+            if i == 0:
+                print(f'0%{"."*7}25%{"."*10}50%{"."*9}75%{"."*9}100%')
+            elif (i+1) % round(self.n_itr/50) == 0:
+                print('+', end = '')
+            if i == self.n_itr - 1:
+                print()
+
+
+
 SUPPORTED_EXT = ['.pkl', '.csv', '.png']
 
 def sep_path_name_ext(path_name_ext):
@@ -60,6 +74,7 @@ def save_dt(var, path_name_ext, datetime_format="%y%m%d%H%M", **kwargs):
 		var.to_csv(path_name_dt_ext, **kwargs)
 	elif ext == '.png':
 		var.savefig(path_name_dt_ext, **kwargs)
+		var.close()
 	else:
 		assert False, 'not handled'
 
@@ -70,9 +85,7 @@ def find_newest(path_name_ext):
 	path, name, ext = sep_path_name_ext(path_name_ext)
 
 	all_files = os.listdir(path)
-	# print(all_files)
 	all_matches = [x for x in all_files if re.match(fr'{name}_\d{{10}}{ext}', x)]
-	# print(all_matches)
 	all_dt = [x[len(name)+1:-len(ext)] for x in all_matches]
 	assert all_dt != [], 'cannot find any files, datetime must be 10 digits'
 

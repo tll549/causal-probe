@@ -6,137 +6,192 @@ import pandas as pd
 
 from causal_probe import utils
 
+from zipfile import ZipFile
+import codecs
+import nltk
+# nltk.download('punkt')
+from nltk.tokenize import word_tokenize
+
 class DataLoader(object):
-    def __init__(self):
-        self.X, self.y = [], []
-        self.rel = []
+	def __init__(self):
+		self.X, self.y = [], []
+		self.rel = []
 
-    def read(self, data_path):
-        with open(data_path) as f:
-            next_is_y = False
-            for line in f:
-                if line[0].isnumeric():
-                    self.X.append(line.split('\t')[1].split('\n')[0]) # only extract the sentence part
-                    next_is_y = True
-                else:
-                    if next_is_y:
-                        self.y.append(line.split('\n')[0])
-                        next_is_y = False
-        logging.debug(f'loaded X len: {len(self.X)}')
+	def read(self, data_path):
+		with open(data_path) as f:
+			next_is_y = False
+			for line in f:
+				if line[0].isnumeric():
+					self.X.append(line.split('\t')[1].split('\n')[0]) # only extract the sentence part
+					next_is_y = True
+				else:
+					if next_is_y:
+						self.y.append(line.split('\n')[0])
+						next_is_y = False
+		logging.debug(f'loaded X len: {len(self.X)}')
 
-    def preprocess(self, trial=False):
-        all_relations_dict = {k:re.sub(r'\(e\d,e\d\)', '', k) for k in list(set(self.y))}
+	def preprocess(self, trial=False):
+		all_relations_dict = {k:re.sub(r'\(e\d,e\d\)', '', k) for k in list(set(self.y))}
 
-        X, y = [], []
-        sub, obj = [], []
-        for i in range(len(self.X)):
-            self.rel.append(all_relations_dict[self.y[i]])
+		X, y = [], []
+		sub, obj = [], []
+		for i in range(len(self.X)):
+			self.rel.append(all_relations_dict[self.y[i]])
 
-            e1_pattern, e2_pattern = r'<e1>(.*)</e1>', r'<e2>(.*)</e2>'
-            e1 = re.findall(e1_pattern, self.X[i])[0]
-            e2 = re.findall(e2_pattern, self.X[i])[0]
-            sub_temp = e1 if '(e1,e2)' in self.y[i] else e2
-            obj_temp = e2 if '(e1,e2)' in self.y[i] else e1
-            sub.append(sub_temp)
-            obj.append(obj_temp)
-            x = re.sub(r'</?e\d>', '', self.X[i])[1:-1]
-            X.append(x)
+			e1_pattern, e2_pattern = r'<e1>(.*)</e1>', r'<e2>(.*)</e2>'
+			e1 = re.findall(e1_pattern, self.X[i])[0]
+			e2 = re.findall(e2_pattern, self.X[i])[0]
+			sub_temp = e1 if '(e1,e2)' in self.y[i] else e2
+			obj_temp = e2 if '(e1,e2)' in self.y[i] else e1
+			sub.append(sub_temp)
+			obj.append(obj_temp)
+			x = re.sub(r'</?e\d>', '', self.X[i])[1:-1]
+			X.append(x)
 
-            if trial:
-                if i >= 9:
-                    break
+			if trial:
+				if i >= 9:
+					break
 
-        self.X= X
-        self.sub, self.obj = sub, obj
+		self.X= X
+		self.sub, self.obj = sub, obj
 
-        logging.info(f'processed len X: {len(self.sub)}, causal: {sum([rel == "Cause-Effect" for rel in self.rel])}')
+		logging.info(f'processed len X: {len(self.sub)}, causal: {sum([rel == "Cause-Effect" for rel in self.rel])}')
 
-    def calc_prob(self, epsilon=1e-2, label='self'):
-        def tokenize(X):
-            '''split and lower'''
-            handled_punct = [re.sub(r'([.,!?;])', r' \1', x) for x in X]
-            return [[x2.lower() for x2 in x.split()] for x in handled_punct]
-        tok = tokenize(self.X)
-        # num_words = len(set([w for sent in tok for w in sent])) # can't use this, causes negative in prob causality diff because P(E|C) is counting by sentences, not by words
-        num_sent = len(self.X)
+	def calc_prob(self):
+		def tokenize(X):
+			'''split and lower'''
+			handled_punct = [re.sub(r'([.,!?;])', r' \1', x) for x in X]
+			return [[x2.lower() for x2 in x.split()] for x in handled_punct]
+		tok = tokenize(self.X)
+		# num_words = len(set([w for sent in tok for w in sent])) # can't use this, causes negative in prob causality diff because P(E|C) is counting by sentences, not by words
+		self.num_sent = len(self.X)
 
-        logging.info(f'calculating features')
-        self.output = pd.DataFrame(columns=[
-            'X', 'relation', 'cause', 'effect', 
-            'c_count', 'e_count', 'c_e_count', 'e_no_c_count', 'causal_dependency',
-            'P(E|C)', 'P(E)', 'probabilistic_causality', 'probabilistic_causality_diff',
-            'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power'])
-        for i in range(len(self.X)):
-            c, e = self.sub[i],  self.obj[i]
+		logging.info(f'calculating features...')
+		self.output = pd.DataFrame(columns=[
+			'X', 'relation', 'cause', 'effect', 
+			'c_count', 'e_count', 'c_e_count', 'e_no_c_count', 'causal_dependency',
+			'P(E|C)', 'P(E)', 'probabilistic_causality', 'probabilistic_causality_diff',
+			'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power'])
+		for i in range(len(self.X)):
+			c, e = self.sub[i],  self.obj[i]
 
-            # causal dependency
-            c_count = sum([c in sent for sent in self.X])
-            e_count = sum([e in sent for sent in self.X])
-            c_e_count = sum([c in sent and e in sent for sent in self.X])
-            e_no_c_count = e_count - c_e_count # sum([e in sent and c not in sent for sent in self.X])
-            causal_dependency = c_count == c_e_count and e_no_c_count == 0 # P(E|C) = 1 and P(E|not C) = 0
+			# causal dependency
+			c_count = sum([c in sent for sent in self.X])
+			e_count = sum([e in sent for sent in self.X])
+			c_e_count = sum([c in sent and e in sent for sent in self.X])
+			e_no_c_count = e_count - c_e_count # sum([e in sent and c not in sent for sent in self.X])
+			causal_dependency = c_count == c_e_count and e_no_c_count == 0 # P(E|C) = 1 and P(E|not C) = 0
 
-            # probabilistic causality
-            P_of_E_given_C = c_e_count / c_count
-            P_of_E = e_count / num_sent
-            probabilistic_causality = P_of_E_given_C >= P_of_E
-            probabilistic_causality_diff = P_of_E_given_C - P_of_E
-            # assert probabilistic_causality_diff > 0, f'{P_of_E_given_C}, {P_of_E}, {c_e_count}, {c_count}, {e_count}'
+			# probabilistic causality
+			P_of_E_given_C = c_e_count / c_count
+			P_of_E = e_count / self.num_sent
+			probabilistic_causality = P_of_E_given_C >= P_of_E
+			probabilistic_causality_diff = P_of_E_given_C - P_of_E
+			# assert probabilistic_causality_diff > 0, f'{P_of_E_given_C}, {P_of_E}, {c_e_count}, {c_count}, {e_count}'
 
-            # delta P
-            P_E_given_no_C = e_no_c_count / (num_sent - c_count)
-            delta_P = P_of_E_given_C - P_E_given_no_C
+			# delta P
+			P_E_given_no_C = e_no_c_count / (self.num_sent - c_count)
+			delta_P = P_of_E_given_C - P_E_given_no_C
 
-            # causal power
-            q = delta_P / (1 - P_E_given_no_C)
-            if P_E_given_no_C == 0:
-                # print('000000')
-                p = 0
-            else:
-                p = -delta_P / P_E_given_no_C
-            causal_power = q - p
+			# causal power
+			q = delta_P / (1 - P_E_given_no_C)
+			if P_E_given_no_C == 0:
+				# print('000000')
+				p = 0
+			else:
+				p = -delta_P / P_E_given_no_C
+			causal_power = q - p
 
-            self.output.loc[i, :] = [self.X[i], self.rel[i], c, e, 
-                c_count, e_count, c_e_count, e_no_c_count, causal_dependency,
-                P_of_E_given_C, P_of_E, probabilistic_causality, probabilistic_causality_diff,
-                delta_P, P_E_given_no_C, q, p, causal_power]
-            # if i > 10:
-            #     break 
+			self.output.loc[i, :] = [self.X[i], self.rel[i], c, e, 
+				c_count, e_count, c_e_count, e_no_c_count, causal_dependency,
+				P_of_E_given_C, P_of_E, probabilistic_causality, probabilistic_causality_diff,
+				delta_P, P_E_given_no_C, q, p, causal_power]
+			# if i > 10:
+			#     break 
+		logging.info(f'features calculated for {self.output.shape[0]} sentences')
 
-        # def MinMaxScaler(x):
-        #     if x.max() - x.min() == 0:
-        #         return x
-        #     return (x - x.min()) / (x.max() - x.min())
-        # self.output['probabilistic_causality_diff'] = MinMaxScaler(self.output.probabilistic_causality_diff)
-        # self.output['q_scaled'] = MinMaxScaler(self.output.q)
-        # self.output['p_scaled'] = MinMaxScaler(self.output.p)
-        # self.output['causal_power_scaled'] = MinMaxScaler(self.output.causal_power)
+	def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True):
 
-        logging.info(f'features calculated for {self.output.shape[0]} sentences')
+		if use_semeval_first: # can avoid c_count = 0 in oanc
+			self.calc_prob()
+		else:
+			self.output = pd.DataFrame({'X': self.X, 'relation': self.rel, 'cause': self.sub, 'effect': self.obj})
+			for c in ['c_count', 'e_count', 'c_e_count', 'e_no_c_count']:
+				self.output[c] = 0
+			self.num_sent = 0
 
-    def make_categorical(self, num_classes, num_classes_by, numerical_columns):
-        '''make each numerical variables in each relation categorical'''
-        def float_categorize(s, num_classes, by):
-            '''s should be numerical pd.series'''
-            if by == 'linear':  
-                s = ((s - s.min()) / ((s.max() - s.min()) / num_classes)).astype(int)
-                s[s == num_classes] = num_classes - 1
-                return s
-            elif by == 'quantile':
-                return pd.qcut(s, num_classes, labels=False)
-        for c in numerical_columns:
-            for rel in self.output.relation.unique():
-                try:
-                    self.output.loc[self.output.relation==rel, c + '_cat'] = \
-                        float_categorize(pd.to_numeric(self.output.loc[self.output.relation==rel, c]), 
-                            num_classes, num_classes_by)
-                except ValueError:
-                    print(f'{c}, {rel}, this combination will be dropped later, ValueError: Bin edges must be unique')
-                # assert self.output[c].nunique() <= num_classes, f'more than {num_classes} classes'
-        # remove incomplete cases caused from above
-        self.output = self.output.dropna()
+		logging.info(f'calculating features using OANC...')
+		with ZipFile(oanc_datapath) as zf:
+			txt_written_files = [fn for fn in zf.namelist() if '.txt' in fn and 'written' in fn]
+			logging.info(f'there are {len(txt_written_files)} txt written files')
+			pb = utils.ProgressBar(len(txt_written_files))
+			for f_i, f_path in enumerate(txt_written_files):
+				# print(f_path)
+				pb.now(f_i)
+				all_lines = ''
+				with zf.open(f_path) as f:
+					for line in codecs.iterdecode(f, 'utf8'):
+						all_lines += line
+				all_lines = re.sub(r'\s\s+', ' ', all_lines) # remove repeated spaces ' +'
+				
+				# sep and process by line
+				sentences = nltk.sent_tokenize(all_lines)
+				for sent in sentences:
+					tok = [w.lower() for w in word_tokenize(sent)]
+					self.num_sent += 1
+					# print(tok)
+					c_in = self.output.cause.isin(tok)
+					e_in = self.output.effect.isin(tok)
+					self.output.c_count += c_in
+					self.output.e_count += e_in
+					self.output.c_e_count += c_in & e_in
+					self.output.e_no_c_count += ~c_in & e_in
 
-    def save_output(self, data_path):
-        # self.output.to_csv(data_path, index=False)
-        utils.save_dt(self.output, data_path)
-        # logging.info(f'output saved to {data_path}')
+				# if f_i > 2:
+				# 	break
+				# print(f_i, f_path)
+		logging.info(f'iterated through OANC, {self.num_sent} sentences')
+
+		# causal dependency
+		self.output['causal_dependency'] = (self.output.c_count == self.output.c_e_count) & (self.output.e_no_c_count == 0)
+		# probabilistic causality
+		self.output['P(E|C)'] = self.output.c_e_count / self.output.c_count
+		self.output['P(E)'] = self.output.e_count / self.num_sent
+		self.output['probabilistic_causality'] = self.output['P(E|C)'] >= self.output['P(E)']
+		self.output['probabilistic_causality_diff'] = self.output['P(E|C)'] - self.output['P(E)']
+		# delta P
+		self.output['P(E|no C)'] = self.output.e_no_c_count / (self.num_sent - self.output.c_count)
+		self.output['delta_P'] = self.output['P(E|C)'] - self.output['P(E|no C)']
+
+		# causal power
+		self.output['q'] = self.output.delta_P / (1 - self.output['P(E|no C)'])
+		self.output['p'] = (-self.output.delta_P / self.output['P(E|no C)'].replace({0 : np.nan})).fillna(0) # handle divide by 0
+		self.output['causal_power'] = self.output.q - self.output.p
+
+		# pd.set_option('display.max_columns', 1000)
+		# print(self.output.head())
+
+	def make_categorical(self, num_classes, num_classes_by, numerical_columns):
+		'''make each numerical variables in each relation categorical'''
+		def float_categorize(s, num_classes, by):
+			'''s should be numerical pd.series'''
+			if by == 'linear':  
+				s = ((s - s.min()) / ((s.max() - s.min()) / num_classes)).astype(int)
+				s[s == num_classes] = num_classes - 1
+				return s
+			elif by == 'quantile':
+				return pd.qcut(s, num_classes, labels=False)
+		for c in numerical_columns:
+			for rel in self.output.relation.unique():
+				try:
+					self.output.loc[self.output.relation==rel, c + '_cat'] = \
+						float_categorize(pd.to_numeric(self.output.loc[self.output.relation==rel, c]), 
+							num_classes, num_classes_by)
+				except ValueError:
+					print(f'{c}, {rel}, this combination will be dropped later, ValueError: Bin edges must be unique')
+				# assert self.output[c].nunique() <= num_classes, f'more than {num_classes} classes'
+		# remove incomplete cases caused from above
+		self.output = self.output.dropna()
+
+	def save_output(self, data_path):
+		utils.save_dt(self.output, data_path, index=False)

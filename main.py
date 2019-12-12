@@ -6,7 +6,9 @@ import numpy as np
 import logging
 logging.basicConfig(level=logging.INFO, 
     format='%(asctime)s %(levelname)s %(name)s : %(message)s',
-    datefmt='%Y%m%d %H%M%S')
+    datefmt='%Y%m%d %H%M%S',
+    handlers=[logging.StreamHandler(), 
+        logging.FileHandler('logs/all_log.log')])
 
 import argparse
 
@@ -77,8 +79,8 @@ def get_args():
     #                          'Tense, SubjNumber, ObjNumber, OddManOut, CoordinationInversion')
 
     # # log output
-    # parser.add_argument('-log_to_file', action='store_true',
-    #                     help='log to file')
+    parser.add_argument('-log_to_file', action='store_true',
+                        help='log to file')
     #
     # # output settings
     # parser.add_argument('-output_test', action='store_true',
@@ -95,8 +97,8 @@ def get_args():
         choices=['semeval', 'because'],
         help='')
     parser.add_argument('-label_data', type=str, default='semeval',
-        choices=['semeval'],
-        help='')
+        choices=['semeval', 'oanc'],
+        help='the dataset used as ground truth corpus to calc conditional probabilities')
     parser.add_argument('-reset_data', type=int, default=0,
         help='bool')
     parser.add_argument('-seed', type=int, default=555)
@@ -286,6 +288,7 @@ if __name__ == '__main__':
         transfer_tasks = 'SimpelCausal'
         results = se.eval(transfer_tasks)
         print(results)
+
     elif args.probe == 'mask':
         params = {
             'trial': args.trial,
