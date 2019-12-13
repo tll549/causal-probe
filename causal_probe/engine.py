@@ -8,7 +8,8 @@ import pickle
 
 from causal_probe import utils
 from data import SemEval_preprocess
-from data import feature_preprocess
+from data import feature_preprocess # also for SemEval
+from data import ROC_preprocess
 
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -26,6 +27,9 @@ SemEval_LOGS_DATAPATH = 'logs/'
 SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
 SemEval_feature_ENCODED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings.pkl'
 
+ROC_RAW_DATAPATH = 'data/causal_probing/ROCStories/ROCstories-20191212T222034Z-001.zip'
+ROC_feature_PROCESSED_DATAPATH = 'data/causal_probing/ROCStories/processed/ROC_feature_processed.csv'
+
 OANC_DATAPATH = 'data/causal_probing/OANC_GrAF.zip'
 
 class engine(object):
@@ -37,7 +41,10 @@ class engine(object):
 		if self.params.probing_task == 'mask':
 			self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
 		elif self.params.probing_task == 'feature':
-			self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
+			if self.params.dataset == 'semeval':
+				self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
+			elif self.params.dataset == 'roc':
+				self.processed_datapath = ROC_feature_PROCESSED_DATAPATH
 
 			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
 				# 'probabilistic_causality', 
@@ -46,6 +53,8 @@ class engine(object):
 			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
 				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power']
 			self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
+		# elif self.params.probing_task == 'choice':
+		# 	pass
 
 		self.last_filename = '{}_{}_{}_{}_{}'.format(
 			'_TRIAL' if self.params.trial else '',
@@ -55,7 +64,7 @@ class engine(object):
 	def eval(self):
 		if self.params.reset_data:
 			self.preprocess_data()
-			
+
 		self.load_data()
 		self.prepare_data()
 		self.prepare_encoder()
@@ -101,6 +110,8 @@ class engine(object):
 
 			self.plot_acc_f1(SemEval_LOGS_DATAPATH + 'semeval_feature_result.csv')
 
+		# elif self.params.probing_task == 'choice':
+		# 	print('123')
 
 	def preprocess_data(self):
 		logging.info('preprocessing data...')
@@ -112,19 +123,21 @@ class engine(object):
 				# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
 				dl.write(self.processed_datapath)
 		elif self.params.probing_task == 'feature':
-			dl = feature_preprocess.DataLoader()
 			if self.params.dataset == 'semeval':
+				dl = feature_preprocess.DataLoader()
 				dl.read(SemEval_RAW_DATAPATH)
-			# else:
-			# 	dl.read_label_dataset():
-			dl.preprocess(trial=self.params.trial)
-			if self.params.label_data == 'semeval':
-				dl.calc_prob()
-			elif self.params.label_data == 'oanc':
-				dl.calc_prob_oanc(OANC_DATAPATH)
+			elif self.params.dataset == 'roc':
+				dl = ROC_preprocess.DataLoader()
+				dl.read(ROC_RAW_DATAPATH)
 
-			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
-				self.numerical_columns)
+			dl.preprocess(trial=self.params.trial)
+			# if self.params.label_data == 'semeval':
+			# 	dl.calc_prob()
+			# elif self.params.label_data == 'oanc':
+			# 	dl.calc_prob_oanc(OANC_DATAPATH)
+
+			# dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
+			# 	self.numerical_columns)
 			dl.save_output(self.processed_datapath)
 
 	def load_data(self):
@@ -144,7 +157,6 @@ class engine(object):
 					self.data['rel'].append(line[3])
 			logging.info(f'Loaded {len(self.data["X_orig"])}')
 		elif self.params.probing_task == 'feature':
-			# self.data = pd.read_csv(self.processed_datapath)
 			self.data = utils.load_newest(self.processed_datapath)
 			logging.info(f'Loaded {self.data.shape}')
 

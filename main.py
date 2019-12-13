@@ -94,7 +94,7 @@ def get_args():
         choices=['simple', 'mask', 'choice', 'feature'],
         help='types of probing task, (simpel causal, predict masked, choose between two choises)')
     parser.add_argument('-dataset', type=str, default='semeval',
-        choices=['semeval', 'because'],
+        choices=['semeval', 'because', 'roc'],
         help='')
     parser.add_argument('-label_data', type=str, default='semeval',
         choices=['semeval', 'oanc'],
@@ -326,6 +326,27 @@ if __name__ == '__main__':
             'num_classes': args.num_classes,
             'num_classes_by': args.num_classes_by
         }
-        # print(params)
+        ce = causal_probe.engine(params)
+        result = ce.eval()
+
+    elif args.probe == 'choice':
+        params = {
+            'trial': args.trial,
+            'probing_task': args.probe,
+            'dataset': args.dataset,
+            'reset_data': args.reset_data,
+            'label_data': args.label_data,
+            'seed': args.seed,
+            'pretrained': {
+                'model': args.model,
+                'model_type': args.model_type,
+                'cased': args.cased,
+
+                'both_bert_glove': args.both_bert_glove
+            },
+            'cv': args.cv,
+            'num_classes': args.num_classes,
+            'num_classes_by': args.num_classes_by
+        }
         ce = causal_probe.engine(params)
         result = ce.eval()
