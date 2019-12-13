@@ -29,6 +29,7 @@ SemEval_feature_ENCODED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed
 
 ROC_RAW_DATAPATH = 'data/causal_probing/ROCStories/ROCstories-20191212T222034Z-001.zip'
 ROC_feature_PROCESSED_DATAPATH = 'data/causal_probing/ROCStories/processed/ROC_feature_processed.csv'
+ROC_feature_ENCODED_DATAPATH = 'data/causal_probing/ROCStories/processed/ROC_feature_embeddings.pkl'
 
 OANC_DATAPATH = 'data/causal_probing/OANC_GrAF.zip'
 
@@ -41,10 +42,13 @@ class engine(object):
 		if self.params.probing_task == 'mask':
 			self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
 		elif self.params.probing_task == 'feature':
+			self.result_datapath = SemEval_LOGS_DATAPATH + f'{self.params.dataset}_feature_result.csv'
 			if self.params.dataset == 'semeval':
 				self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
+				self.encoded_datapath = SemEval_feature_ENCODED_DATAPATH
 			elif self.params.dataset == 'roc':
 				self.processed_datapath = ROC_feature_PROCESSED_DATAPATH
+				self.encoded_datapath = ROC_feature_ENCODED_DATAPATH
 
 			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
 				# 'probabilistic_causality', 
@@ -81,10 +85,11 @@ class engine(object):
 		elif self.params.probing_task == 'feature':
 
 			if self.params.pretrained.model == 'bert': # or both
-				if self.params.reset_data:
-					self.encode_data_bert(SemEval_feature_ENCODED_DATAPATH)
-				else:
-					self.load_encoded_data(SemEval_feature_ENCODED_DATAPATH)
+				self.encode_data_bert(self.encoded_datapath)
+				# if self.params.reset_data:
+				# 	self.encode_data_bert(self.encoded_datapath)
+				# else:
+				# 	self.load_encoded_data(self.encoded_datapath)
 				logging.info('start predicting by bert...')
 				self.predict_feature(cv=self.params.cv)
 
@@ -93,9 +98,9 @@ class engine(object):
 
 			if self.params.pretrained.model == 'glove' or self.params.pretrained.both_bert_glove:
 				# if self.params.reset_data:
-				self.encode_data_glove(SemEval_feature_ENCODED_DATAPATH)
+				self.encode_data_glove(self.encoded_datapath)
 				# else:
-				# 	self.load_encoded_data(SemEval_feature_ENCODED_DATAPATH)
+				# 	self.load_encoded_data(self.encoded_datapath)
 
 				logging.info('start predicting by glove...')
 				self.predict_feature(cv=self.params.cv)
@@ -106,9 +111,9 @@ class engine(object):
 				except:
 					self.result_bert_glove = self.result
 
-			utils.save_dt(self.result_bert_glove, SemEval_LOGS_DATAPATH + 'semeval_feature_result.csv')
+			utils.save_dt(self.result_bert_glove, self.result_datapath)
 
-			self.plot_acc_f1(SemEval_LOGS_DATAPATH + 'semeval_feature_result.csv')
+			self.plot_acc_f1(self.result_datapath)
 
 		# elif self.params.probing_task == 'choice':
 		# 	print('123')
@@ -253,12 +258,9 @@ class engine(object):
 		elif self.params.probing_task == 'feature':
 			self.backup_data = self.data.copy()
 			# self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
-			if self.params.dataset == 'semeval':
-				use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
-			elif self.params.dataset == 'roc':
-				use_cols = ['X'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
+			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
 			self.data = self.data[use_cols]
-			self.data.columns = ['X'] + self.all_target_columns
+			self.data.columns = ['X', 'relation'] + self.all_target_columns
 			# print(self.data.head())
 
 	def prepare_encoder(self):
@@ -323,8 +325,8 @@ class engine(object):
 				return word_vec
 			params.word_vec = get_wordvec(PATH_TO_VEC, params.word2id)
 			params.wvec_dim = 300
-			logging.debug(f'word2id: {params.word2id["book"]}') # 90
-			logging.debug(f'word2vec: {params.word_vec["book"][:5]}') # 300
+			logging.debug(f'word2id: {params.word2id["man"]}') # 90
+			logging.debug(f'word2vec: {params.word_vec["man"][:5]}') # 300
 
 		logging.info('prepared')
 
@@ -542,8 +544,11 @@ class engine(object):
 		d = utils.load_newest(result_path)
 
 		# merge f1 and f1_weighted to f1
-		d['f1_binary'] = d.f1
-		d.loc[d.f1.isnull(), 'f1'] = d.loc[d.f1.isnull(), 'f1_weighted']
+		if 'f1' in d.columns:
+			d['f1_binary'] = d.f1
+			d.loc[d.f1.isnull(), 'f1'] = d.loc[d.f1.isnull(), 'f1_weighted']
+		else:
+			d['f1'] = d['f1_weighted']
 
 		def plot_metric(d, metric, only_causal):
 			if not only_causal:
