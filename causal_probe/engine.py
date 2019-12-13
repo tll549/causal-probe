@@ -131,13 +131,13 @@ class engine(object):
 				dl.read(ROC_RAW_DATAPATH)
 
 			dl.preprocess(trial=self.params.trial)
-			# if self.params.label_data == 'semeval':
-			# 	dl.calc_prob()
-			# elif self.params.label_data == 'oanc':
-			# 	dl.calc_prob_oanc(OANC_DATAPATH)
+			if self.params.label_data == 'semeval':
+				dl.calc_prob()
+			elif self.params.label_data == 'oanc':
+				dl.calc_prob_oanc(OANC_DATAPATH)
 
-			# dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
-			# 	self.numerical_columns)
+			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
+				self.numerical_columns)
 			dl.save_output(self.processed_datapath)
 
 	def load_data(self):
@@ -253,9 +253,12 @@ class engine(object):
 		elif self.params.probing_task == 'feature':
 			self.backup_data = self.data.copy()
 			# self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
-			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
+			if self.params.dataset == 'semeval':
+				use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
+			elif self.params.dataset == 'roc':
+				use_cols = ['X'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
 			self.data = self.data[use_cols]
-			self.data.columns = ['X', 'relation'] + self.all_target_columns
+			self.data.columns = ['X'] + self.all_target_columns
 			# print(self.data.head())
 
 	def prepare_encoder(self):
