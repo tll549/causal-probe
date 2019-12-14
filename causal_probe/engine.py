@@ -85,11 +85,11 @@ class engine(object):
 		elif self.params.probing_task == 'feature':
 
 			if self.params.pretrained.model == 'bert': # or both
-				self.encode_data_bert(self.encoded_datapath)
-				# if self.params.reset_data:
-				# 	self.encode_data_bert(self.encoded_datapath)
-				# else:
-				# 	self.load_encoded_data(self.encoded_datapath)
+				# self.encode_data_bert(self.encoded_datapath)
+				if self.params.reset_data:
+					self.encode_data_bert(self.encoded_datapath)
+				else:
+					self.load_encoded_data(self.encoded_datapath)
 				logging.info('start predicting by bert...')
 				self.predict_feature(cv=self.params.cv)
 
