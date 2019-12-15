@@ -28,15 +28,16 @@ class ProgressBar(object):
 
 
 
-SUPPORTED_EXT = ['.pkl', '.csv', '.png']
+SUPPORTED_EXT = ['.pkl', '.csv', '.png', '.txt']
 
 def sep_path_name_ext(path_name_ext):
 	ext = [ext_test for ext_test in SUPPORTED_EXT if path_name_ext[-len(ext_test):] == ext_test]
 	assert ext != [], 'please specify extension / extension not supported, currently support: {}'.format(SUPPORTED_EXT)
 	ext = ext[0]
 	path_name = path_name_ext[:-len(ext)]
-	if '/' in path_name:
-		splitted = path_name.split('/')
+	if '/' in path_name or '\\' in path_name:
+		# splitted = path_name.split('/')
+		splitted = re.split(r'/|\\', path_name)
 		path = '/'.join(splitted[:-1])
 		name = splitted[-1]
 	else:
@@ -63,20 +64,38 @@ def save_dt(var, path_name_ext, datetime_format="%y%m%d%H%M", **kwargs):
 	save var to '../data/titanic_201912091148.pkl'
 
 	plt to '.png'
+
+	for .txt
+	var needs to be a list of string, each element is a line
 	'''
 	path_name_dt_ext, ext = append_dt(path_name_ext, datetime_format)
 
 	if ext == '.pkl':
 		with open(path_name_dt_ext, 'wb') as f:
 			pickle.dump(var, f)
+
 	elif ext == '.csv':
 		assert isinstance(var, pd.DataFrame), 'not handled'
 		var.to_csv(path_name_dt_ext, **kwargs)
+
 	elif ext == '.png':
+		if kwargs == {}: # default kwargs
+			kwargs = {'dpi': 600, 'bbox_inches': 'tight'}
+
 		var.savefig(path_name_dt_ext, **kwargs)
-		var.close()
+		
+		try:
+			var.close()
+		except:
+			# print("didn't close")
+			pass
+
+	elif ext == '.txt':
+		with open(path_name_dt_ext, 'w+', encoding='utf-8', **kwargs) as f:
+			f.writelines(var)
+
 	else:
-		assert False, 'not handled'
+		assert False, 'currently can only handle' + str(SUPPORTED_EXT)
 
 	logging.info(f'{path_name_dt_ext} saved')
 

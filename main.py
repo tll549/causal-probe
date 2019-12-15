@@ -88,8 +88,8 @@ def get_args():
 
 
     # probing task
-    parser.add_argument('-trial', type=int, default=0,
-        help='bool (0 or 1)')
+    parser.add_argument('-trial', action='store_true',
+        help='if trial run') # '-trial' means true, '' means false
     parser.add_argument('-probe', type=str, default='simple',
         choices=['simple', 'mask', 'choice', 'feature'],
         help='types of probing task, (simpel causal, predict masked, choose between two choises)')
@@ -265,29 +265,45 @@ if __name__ == '__main__':
 
     if args.probe == 'simple':
         # par settings from lingyu
-        params_senteval = {'task_path': args.data_path,
-                               'output_path': args.output_path,
-                               'rerun': args.rerun,
-                               'reset_data': args.reset_data,
-                               'batch_size': args.batch_size,
+        # params_senteval = {'task_path': args.data_path,
+        #                        'output_path': args.output_path,
+        #                        'rerun': args.rerun,
+        #                        'reset_data': args.reset_data,
+        #                        'batch_size': args.batch_size,
 
-                            # 'usepytorch': True, 'kfold': 5, # from example
+        #                     # 'usepytorch': True, 'kfold': 5, # from example
 
-                               'pretrained': {'model': args.model,
-                                              'model_type': args.model_type,
-                                              'cased': args.cased,
-                                              'fine_tune': args.fine_tune,
-                                              'method': args.method},
-                               'classifier': {'optim': args.optim,
-                                              'nhid': 0,
-                                              'noreg': True}
-                               }
+        #                        'pretrained': {'model': args.model,
+        #                                       'model_type': args.model_type,
+        #                                       'cased': args.cased,
+        #                                       'fine_tune': args.fine_tune,
+        #                                       'method': args.method},
+        #                        'classifier': {'optim': args.optim,
+        #                                       'nhid': 0,
+        #                                       'noreg': True}
+        #                        }
 
-        se = senteval.engine.SE(params_senteval, batcher, prepare)
-        # transfer_tasks = ['Length']
-        transfer_tasks = 'SimpelCausal'
-        results = se.eval(transfer_tasks)
-        print(results)
+        # se = senteval.engine.SE(params_senteval, batcher, prepare)
+        # # transfer_tasks = ['Length']
+        # transfer_tasks = 'SimpelCausal'
+        # results = se.eval(transfer_tasks)
+        # print(results)
+
+        params = {
+            'trial': args.trial,
+            'probing_task': args.probe,
+            'dataset': args.dataset,
+            'reset_data': args.reset_data,
+            'seed': args.seed,
+            'pretrained': {
+                'model': args.model,
+                'model_type': args.model_type,
+                'cased': args.cased
+            },
+            'cv': args.cv,
+        }
+        ce = causal_probe.engine(params)
+        result = ce.eval()
 
     elif args.probe == 'mask':
         params = {

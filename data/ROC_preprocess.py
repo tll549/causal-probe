@@ -95,9 +95,9 @@ class DataLoader(object):
                 assert len(non_causal_sent) > 6
             if trial:
                 break
-        self.processed = pd.DataFrame(processed)
-        logging.info(f'processed: {self.processed.shape}, causal: {self.processed.causal.sum()}')
-        self.X, self.sub, self.obj = self.processed.X, self.processed.cause,  self.processed.effect
+        self.output = pd.DataFrame(processed)
+        logging.info(f'processed: {self.output.shape}, causal: {self.output.causal.sum()}')
+        self.X, self.sub, self.obj = self.output.X, self.output.cause,  self.output.effect
 
     def calc_prob(self):
         def tokenize(X):
@@ -241,38 +241,3 @@ class DataLoader(object):
 
     def save_output(self, data_path):
         utils.save_dt(self.output, data_path, index=False)
-
-    # def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
-    #     random.seed(seed)
-    #     idx = list(range(len(self.X)))
-    #     random.shuffle(idx)
-    #     idx_1 = int(len(self.X) * (1-dev_prop-test_prop))
-    #     idx_2 = idx_1 + int(len(self.X) * dev_prop)
-
-    #     self.train_idx = idx[:idx_1]
-    #     self.dev_idx = idx[idx_1:idx_2]
-    #     self.test_idx = idx[idx_2:]
-    #     logging.info(f'data splitted train: {len(self.train_idx)}, dev: {len(self.dev_idx)}, test: {len(self.test_idx)}')
-    #     assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
-
-    # def write(self, data_path):
-    #     with open(data_path, 'w+') as f:
-    #         for i in self.train_idx:
-    #             f.write(f'tr\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-    #         for i in self.dev_idx:
-    #             f.write(f'va\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-    #         for i in self.test_idx:
-    #             f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
-    #     logging.info(f'data wrote')
-
-
-# logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
-# if __name__ == '__main__':
-#     args = get_args()
-#     # print(args)
-
-#     dl = DataLoader()
-#     dl.read(args.raw_data_path)
-#     dl.preprocess()
-#     dl.split()
-#     dl.write(args.save_data_path + '/because_all.txt')

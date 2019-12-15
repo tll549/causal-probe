@@ -20,9 +20,22 @@ import seaborn as sns
 
 PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
-SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
-SemEval_mask_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask'
-SemEval_LOGS_DATAPATH = 'logs/'
+DATAPATH = 'data/causal_probing/'
+
+SEMEVAL_PATH = 'SemEval_2010_8'
+SEMEVAL_DATA = 'TRAIN_FILE.TXT' # 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
+
+ROC_PATH = 'ROCStories'
+ROC_DATA = 'ROCstories-20191212T222034Z-001.zip' # 'data/causal_probing/ROCStories/ROCstories-20191212T222034Z-001.zip'
+
+OANC_DATA = 'OANC_GrAF.zip' # 'data/causal_probing/OANC_GrAF.zip'
+
+LOGS_PATH = 'logs/'
+
+
+# SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT' # os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA)
+# SemEval_mask_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask'
+# SemEval_LOGS_DATAPATH = 'logs/'
 
 SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
 SemEval_feature_ENCODED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings.pkl'
@@ -39,16 +52,49 @@ class engine(object):
 		self.params.pretrained = utils.dotdict(self.params.pretrained)
 		logging.info('params: ' + str(self.params))
 
+		# raw data path
+		if self.params.dataset == 'semeval':
+			self.raw_datapath = os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA)
+		elif self.params.dataset == 'roc':
+			self.raw_datapath = os.path.join(DATAPATH, ROC_PATH, ROC_DATA)
+
+		# processed data path, encoded data path, result csv data path, and fig data path
+		if self.params.probing_task == 'simple':
+			config_filename = '_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)])
+			if self.params.dataset == 'semeval':
+				dataset_path = SEMEVAL_PATH
+			elif self.params.dataset == 'roc':
+				dataset_path = ROC_PATH
+
+			# universal setting?
+			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
+				f'{self.params.probing_task}.csv')
+			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
+				f'{self.params.probing_task}')
+			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
+			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}.png')
+
 		if self.params.probing_task == 'mask':
-			self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
+			self.processed_datapath = os.path.join(DATAPATH, SEMEVAL_PATH, 'processed', 
+				f'{self.params.probing_task}_{self.params.mask}.txt') # 'data/causal_probing/SemEval_2010_8/processed/mask_cause.txt'
+			# self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
+			
+			# e.g., TRIAL_mask_semeval_cause_555
+			config_filename = ('TRIAL_' if self.params.trial else '') + \
+				'_'.join([self.params.probing_task, self.params.dataset, self.params.mask, str(self.params.seed)])
+			self.pred_datapath = os.path.join(LOGS_PATH, 'pred_' + config_filename) # without extension
+			self.acc_datapath = os.path.join(LOGS_PATH, 'acc_' + config_filename)
+			self.fig_datapath = os.path.join(LOGS_PATH, 'fig_' + config_filename)
+
 		elif self.params.probing_task == 'feature':
-			self.result_datapath = SemEval_LOGS_DATAPATH + f'{self.params.dataset}_feature_result.csv'
 			if self.params.dataset == 'semeval':
 				self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
 				self.encoded_datapath = SemEval_feature_ENCODED_DATAPATH
 			elif self.params.dataset == 'roc':
 				self.processed_datapath = ROC_feature_PROCESSED_DATAPATH
 				self.encoded_datapath = ROC_feature_ENCODED_DATAPATH
+
+			self.result_datapath = LOGS_PATH + f'{self.params.dataset}_feature_result.csv'
 
 			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
 				# 'probabilistic_causality', 
@@ -71,16 +117,30 @@ class engine(object):
 
 		self.load_data()
 		self.prepare_data()
-		self.prepare_encoder()
+		# self.prepare_encoder() # no need if use the new self.encode
 
 		if self.params.probing_task == 'simple':
-			# not done yet
-			pass
+			self.result = []
+			for model in ['bert', 'glove']:
+				if self.params.reset_data:
+					self.encode(model, self.encoded_datapath + f'_{model}.pkl')
+				embeddings = utils.load_newest(self.encoded_datapath + f'_{model}.pkl')
+				logging.info(f'all encoded data loaded')
+
+				result_raw = self.train(embeddings, self.data.causal)
+				for r in result_raw:
+					r['model'] = model
+				self.result += result_raw
+			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'value'])
+			utils.save_dt(self.result, self.result_datapath)
+			# print(self.result)
+
+			self.plot_metrics(self.fig_datapath)
 
 		elif self.params.probing_task == 'mask':
 			self.predict_mask()
-			self.save_pred(SemEval_LOGS_DATAPATH)
-			self.plot_acc(SemEval_LOGS_DATAPATH)
+			self.save_pred_mask()
+			self.plot_acc_mask()
 
 		elif self.params.probing_task == 'feature':
 
@@ -120,17 +180,27 @@ class engine(object):
 
 	def preprocess_data(self):
 		logging.info('preprocessing data...')
-		if self.params.probing_task == 'mask':
+		if self.params.probing_task == 'simple':
 			if self.params.dataset == 'semeval':
 				dl = SemEval_preprocess.DataLoader()
-				dl.read(SemEval_RAW_DATAPATH)
+			elif self.params.dataset == 'roc':
+				dl = ROC_preprocess.DataLoader()
+			dl.read(self.raw_datapath)
+			dl.preprocess(trial=self.params.trial)
+			dl.save_output(self.processed_datapath)
+
+		elif self.params.probing_task == 'mask':
+			if self.params.dataset == 'semeval':
+				dl = SemEval_preprocess.DataLoader()
+				dl.read(self.raw_datapath)
 				dl.preprocess(self.params.probing_task, mask=self.params.mask)
 				# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
 				dl.write(self.processed_datapath)
+
 		elif self.params.probing_task == 'feature':
 			if self.params.dataset == 'semeval':
 				dl = feature_preprocess.DataLoader()
-				dl.read(SemEval_RAW_DATAPATH)
+				dl.read(self.raw_datapath)
 			elif self.params.dataset == 'roc':
 				dl = ROC_preprocess.DataLoader()
 				dl.read(ROC_RAW_DATAPATH)
@@ -146,11 +216,6 @@ class engine(object):
 			dl.save_output(self.processed_datapath)
 
 	def load_data(self):
-		# if self.params.dataset == 'semeval':
-		# 	fpath = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask_processed.txt'
-		# elif self.params.dataset == 'because':
-		# 	fpath = 'data/causal_probing/BECAUSE/processed/because_all.txt'
-
 		if self.params.probing_task == 'mask':
 			self.data = {'X_orig': [], 'y': [], 'rel': []}
 			with io.open(self.processed_datapath, 'r', encoding='utf-8') as f:
@@ -161,30 +226,21 @@ class engine(object):
 					self.data['X_orig'].append(line[2])
 					self.data['rel'].append(line[3])
 			logging.info(f'Loaded {len(self.data["X_orig"])}')
-		elif self.params.probing_task == 'feature':
+
+		elif self.params.probing_task == 'simple' or self.params.probing_task == 'feature':
 			self.data = utils.load_newest(self.processed_datapath)
 			logging.info(f'Loaded {self.data.shape}')
 
 	def prepare_data(self):
-		if self.params.probing_task == 'mask':
+		if self.params.probing_task == 'simple':
+			return
+
+		elif self.params.probing_task == 'mask':
 			self.data['X_shuf'], self.data['X_trunc'], self.data['X_shuf_trunc'] = [], [], []
 			def tokenize_with_mask(x):
-				# x = 'eroj ewriow eio. fwiej; fweji, wdej! erijf?'
-				# print(x)
 				x = re.sub(r'([.,!?;])', r' \1', x) # replace sth like '.' to ' .'
-				# print(x)
 				x = x.split()
-				# print(x)
-				# separate like [MASK]. to [MASK] .
-				# mask_index = [i for i in range(len(x)) if '[MASK]' in x[i] and x[i] != '[MASK]']
-				# for i in mask_index:
-				# 	x.insert(i+1, re.sub(r'\[MASK\]', '', x[i]))
-				# 	x[i] = '[MASK]'
-				# period = x[-2][-1]
-				# x[-2] = x[-2][:-1]
-				# x.insert(-1, period)
 
-				# print(x)
 				# join like [MASK] [MASK]
 				mask_index = [i for i in range(len(x)) if '[MASK]' in x[i]]
 				x = x[:mask_index[0]] + [' '.join(x[mask_index[0]:mask_index[-1]+1])] + x[mask_index[-1]+1:]
@@ -192,15 +248,9 @@ class engine(object):
 			def shuffle(x):
 				'''shuffle everything except [CLS], last character (period), [SEP]'''
 				x = tokenize_with_mask(x)
-				# print(x)
 				start_token, end_token, period = x.pop(0), x.pop(), x.pop()
-				# print(x)
 				np.random.shuffle(x)
-				# x[-1] = x[-1] + period
 				x = [start_token] + x + [period, end_token]
-				# print(x)
-				# print(' '.join(x))
-				# print()
 				return ' '.join(x)
 			def truncate(x):
 				'''truncate the sentence to A B [MASK] C D, or A B C D [MASK], etc'''
@@ -210,9 +260,7 @@ class engine(object):
 				# assert mask_index[-1] - mask_index[0] == len(mask_index) - 1, 'masks should be neighbor'
 				
 				keep = 2
-				# print(mask_index)
 				start_idx, end_idx = mask_index[0]-keep, mask_index[-1]+keep
-				# print(start_idx, end_idx)
 				if start_idx < 0:
 					end_idx += -start_idx
 					start_idx = 0
@@ -220,13 +268,8 @@ class engine(object):
 					# print(end_idx, len(x))
 					start_idx -= end_idx - len(x) + 1
 					start_idx = 0 if start_idx < 0 else start_idx
-				# print(start_idx, end_idx)
-				# print()
 				x = x[start_idx:end_idx+1]
-				# period = x.pop()
-				# x[-1] += period
 				x = [start_token] + x + [end_token]
-				# print(x)
 				# ignore this restriction when the sentence is short, or when mask is not in neighbor (after shuffle)
 				if len(x) > 6 and mask_index[-1] - mask_index[0] == len(mask_index) - 1: 
 					assert len(x) == 2 + len(mask_index) + keep*2
@@ -234,21 +277,15 @@ class engine(object):
 
 			np.random.seed(self.params.seed)
 			for i in range(len(self.data['X_orig'])):
-				# print(self.data['X_orig'][i])
 
 				shuf = shuffle(self.data['X_orig'][i])
 				self.data['X_shuf'].append(shuf)
-				# print(shuf)
 
 				trunc = truncate(self.data['X_orig'][i])
 				self.data['X_trunc'].append(trunc)
-				# print(trunc)
 
 				shuf_trunc = truncate(shuf)
 				self.data['X_shuf_trunc'].append(shuf_trunc)
-				# print(shuf_trunc)
-				# print()
-				# break
 			
 			# print(self.data['X_orig'][7555])
 			# print(self.data['X_shuf'][7555])
@@ -261,7 +298,7 @@ class engine(object):
 			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
 			self.data = self.data[use_cols]
 			self.data.columns = ['X', 'relation'] + self.all_target_columns
-			# print(self.data.head())
+
 
 	def prepare_encoder(self):
 		logging.info('preparing encoder...')
@@ -273,7 +310,7 @@ class engine(object):
 			params.tokenizer = BertTokenizer.from_pretrained(bert_type)
 			if self.params.probing_task == 'mask':
 				params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
-			elif self.params.probing_task == 'feature':
+			else:
 				params.encoder = BertModel.from_pretrained('bert-base-uncased')
 			params.encoder.eval() # ??
 
@@ -330,65 +367,145 @@ class engine(object):
 
 		logging.info('prepared')
 
-	def encode_data_bert(self, save_path):
-		logging.info('encoding data...')
-
-		hidden_size = self.params.encoder.config.hidden_size
-		self.embeddings = torch.zeros(self.data.shape[0], hidden_size)
-		for i in range(len(self.data.X)):
-			x = '[CLS] ' + self.data.X[i] + ' [SEP]'
-
-			tokenized_text = self.params.tokenizer.tokenize(x)
-			indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
-			tokens_tensor = torch.tensor([indexed_tokens])
-
-			with torch.no_grad():
-				outputs = self.params.encoder(tokens_tensor)
-				encoded_layers = outputs[0]
-
-			self.embeddings[i, :] = torch.mean(encoded_layers, dim=1)
-			# print(encoded_layers.shape)
-
-			if self.params.trial:
-				break
-		self.embeddings = self.embeddings.numpy()
-
-		utils.save_dt(self.embeddings, save_path)
-		logging.info(f'data encoded, embeddings shape: {self.embeddings.shape}')
-
-	def encode_data_glove(self, save_path):
+	def encode(self, model, save_path):
+		'''prepare different encoders and save to save_path'''
+		logging.info(f'preparing encoder {model}...')
 		params = self.params
 
-		self.embeddings = []
-		for sent in self.data.X:
-			sentvec = []
-			for word in sent:
-				if word in params.word_vec:
-					sentvec.append(params.word_vec[word])
-			if not sentvec:
-				vec = np.zeros(params.wvec_dim)
-				sentvec.append(vec)
-			sentvec = np.mean(sentvec, 0)
-			self.embeddings.append(sentvec)
+		if model == 'bert':
+			bert_type = f'bert-{params.pretrained.model_type}-{"cased" if params.pretrained.cased else "uncased"}'
+			logging.getLogger('transformers').setLevel(logging.ERROR)
+			params.tokenizer = BertTokenizer.from_pretrained(bert_type)
+			# if self.params.probing_task == 'mask':
+			# 	params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
+			# else:
+			# 	params.encoder = BertModel.from_pretrained('bert-base-uncased')
+			params.encoder = BertModel.from_pretrained('bert-base-uncased')
+			params.encoder.eval() # ??
 
-		self.embeddings = np.vstack(self.embeddings)
-		# print(embeddings.shape) # (128, 300)
-		# print(embeddings)
-		return self.embeddings
+		elif model == 'glove':
+			# if 'train' in self.data:
+			# 	samples = self.data['train']['X'] + self.data['dev']['X'] + self.data['test']['X']
+			# else:
+			# 	samples = self.data['X']
+			samples = self.data['X']
+			samples = [s.split() for s in samples]
+			# Create dictionary
+			def create_dictionary(sentences, threshold=0):
+				words = {}
+				for s in sentences:
+					for word in s:
+						words[word] = words.get(word, 0) + 1
+
+				if threshold > 0:
+					newwords = {}
+					for word in words:
+						if words[word] >= threshold:
+							newwords[word] = words[word]
+					words = newwords
+				words['<s>'] = 1e9 + 4
+				words['</s>'] = 1e9 + 3
+				words['<p>'] = 1e9 + 2
+
+				sorted_words = sorted(words.items(), key=lambda x: -x[1])  # inverse sort
+				id2word = []
+				word2id = {}
+				for i, (w, _) in enumerate(sorted_words):
+					id2word.append(w)
+					word2id[w] = i
+
+				return id2word, word2id
+			_, params.word2id = create_dictionary(samples)
+			# Get word vectors from vocabulary (glove, word2vec, fasttext ..)
+			def get_wordvec(path_to_vec, word2id):
+				word_vec = {}
+
+				with io.open(path_to_vec, 'r', encoding='utf-8') as f:
+					# if word2vec or fasttext file : skip first line "next(f)"
+					for line in f:
+						word, vec = line.split(' ', 1)
+						if word in word2id:
+							word_vec[word] = np.fromstring(vec, sep=' ')
+
+				logging.info('Found {0} words with word vectors, out of {1} words'.format(len(word_vec), len(word2id)))
+				return word_vec
+			params.word_vec = get_wordvec(PATH_TO_VEC, params.word2id)
+			params.wvec_dim = 300
+			logging.debug(f'word2id: {params.word2id["man"]}') # 90
+			logging.debug(f'word2vec: {params.word_vec["man"][:5]}') # 300
+
+		logging.info(f'prepared encoder {model}')
+
+
+		logging.info(f'encoding data by {model}...')
+		if model == 'bert':
+			hidden_size = self.params.encoder.config.hidden_size
+			embeddings = torch.zeros(self.data.shape[0], hidden_size)
+			pb = utils.ProgressBar(len(self.data.X))
+			for i in range(len(self.data.X)):
+				pb.now(i)
+
+				x = '[CLS] ' + self.data.X[i] + ' [SEP]'
+
+				tokenized_text = self.params.tokenizer.tokenize(x)
+				indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
+				tokens_tensor = torch.tensor([indexed_tokens])
+
+				with torch.no_grad():
+					outputs = self.params.encoder(tokens_tensor)
+					encoded_layers = outputs[0]
+
+				embeddings[i, :] = torch.mean(encoded_layers, dim=1)
+				# print(encoded_layers.shape)
+
+				if self.params.trial:
+					break
+			embeddings = embeddings.numpy()
+
+		elif model == 'glove':
+			embeddings = []
+			for sent in self.data.X:
+				sentvec = []
+				for word in sent:
+					if word in params.word_vec:
+						sentvec.append(params.word_vec[word])
+				if not sentvec:
+					vec = np.zeros(params.wvec_dim)
+					sentvec.append(vec)
+				sentvec = np.mean(sentvec, 0)
+				embeddings.append(sentvec)
+
+			embeddings = np.vstack(embeddings)
+
+		utils.save_dt(embeddings, save_path)
+		logging.info(f'data encoded by {model}, embeddings shape: {embeddings.shape}')
+		# return embeddings
+
+	# obsolete ↓↓
+	def encode_data_bert(self, save_path):
+		self.embeddings = self.encode(self, 'bert', save_path)
+		return
+
+	def encode_data_glove(self, save_path):
+		self.embeddings = self.encode(self, 'glove', save_path)
+		return
 
 	def load_encoded_data(self, save_path):
 		self.embeddings = utils.load_newest(save_path)
 		logging.info(f'loaded, embeddings shape {self.embeddings.shape}')
+	# obsolete ↑↑
+
 
 	def predict_mask(self):
 		logging.info('predicting...')
-		# k = self.params.k
 		k_list = [1, 3, 5, 7, 9, 10, 20]
 		X_types = ['X_orig', 'X_shuf', 'X_trunc', 'X_shuf_trunc']
 		correct = {rel:{k:{X_type:[] for X_type in X_types} for k in k_list} for rel in list(set(self.data['rel']))}
 		self.pred = []
 		
+		pb = utils.ProgressBar(len(self.data['X_orig']))
 		for i in range(len(self.data['X_orig'])):
+			pb.now(i)
 			pred = []
 			y = self.data['y'][i]
 			rel = self.data['rel'][i]
@@ -404,9 +521,11 @@ class engine(object):
 				# print(masked_index)
 				tokens_tensor = torch.tensor([indexed_tokens])
 				tokens_tensor = tokens_tensor.to(DEVICE)
+				# print(tokens_tensor.shape)
 
 				with torch.no_grad():
 					outputs = self.params.encoder(tokens_tensor)
+					# print(len(outputs))
 					predictions = outputs[0]
 				# print(predictions.shape) # 1, 19, 768
 				# print(predictions[0, masked_index].shape) # 2, 768
@@ -441,8 +560,8 @@ class engine(object):
 			self.pred.append(pred)
 
 			if self.params.trial:
-				print(pred)
-				print()
+				# print(pred)
+				# print()
 				if i == 8:
 					break
 		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
@@ -503,26 +622,66 @@ class engine(object):
 		
 		# utils.save_dt(result, index=False)
 
-	def save_pred(self, path):
-		with open(path + 'result' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
-			for l in self.pred:
-				o = '\t'.join([str(x) for x in l]) + '\n'
-				f.write(o)
-		with open(path + 'result' + self.last_filename + '.pkl', 'wb') as f:
-			pickle.dump(self.pred, f)
+	def train(self, embeddings, y):
+		from sklearn.model_selection import cross_validate
+		from sklearn.linear_model import LogisticRegression
 
-		with open(path + 'acc' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
-			for k, v in self.acc.items():
-				f.write(k + ' : ' + str(v) + '\n')
-		with open(path + 'acc' + self.last_filename + '.pkl', 'wb') as f:
-			pickle.dump(self.acc, f)
+		from sklearn.utils.testing import ignore_warnings
+		from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
 
-		logging.info('files saved')
+		import warnings
+		warnings.filterwarnings("ignore", category=FutureWarning)
+		warnings.filterwarnings("ignore", category=ConvergenceWarning)
+		warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
-	def plot_acc(self, path):
-		with open(path + 'acc' + self.last_filename + '.pkl', 'rb') as f:
-			acc = pickle.load(f)
+		X = embeddings
+		y = np.array(y)
+		assert X.shape[0] == len(y), f'X shape {X.shape} and y len {len(y)} not compatible'
+
+		clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed,
+			class_weight='balanced', max_iter=1000) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
 		
+		if len(np.unique(y)) == 2: # binary
+			scoring = ('accuracy', 'balanced_accuracy', 'f1', 
+				'precision', 'recall', 'roc_auc')
+		else: # multiclass
+			scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted')
+		cv_results = cross_validate(clf, X, y, cv=self.params.cv, error_score='raise', scoring=scoring,
+			n_jobs=5) # error_score=np.nan
+
+		result_raw = [{'metric': k, 'value': v} for k in scoring for v in cv_results[f'test_{k}']]
+		return result_raw
+
+	def save_pred_mask(self):
+		lines_pred = ['\t'.join([str(x) for x in l]) + '\n' for l in self.pred]
+		utils.save_dt(lines_pred, self.pred_datapath + '.txt')
+		utils.save_dt(self.pred, self.pred_datapath + '.pkl')
+
+		lines_acc = [k + ' : ' + str(v) + '\n' for k, v in self.acc.items()]
+		utils.save_dt(lines_acc, self.acc_datapath + '.txt')
+		utils.save_dt(self.acc, self.acc_datapath + '.pkl')
+
+		# with open(log_path + 'result' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
+		# 	for l in self.pred:
+		# 		o = '\t'.join([str(x) for x in l]) + '\n'
+		# 		f.write(o)
+		# with open(log_path + 'result' + self.last_filename + '.pkl', 'wb') as f:
+		# 	pickle.dump(self.pred, f)
+
+		# with open(log_path + 'acc' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
+		# 	for k, v in self.acc.items():
+		# 		f.write(k + ' : ' + str(v) + '\n')
+		# with open(log_path + 'acc' + self.last_filename + '.pkl', 'wb') as f:
+		# 	pickle.dump(self.acc, f)
+
+		# logging.info('files saved')
+
+	def plot_acc_mask(self):
+		# with open(path + 'acc' + self.last_filename + '.pkl', 'rb') as f:
+		# 	acc = pickle.load(f)
+		acc = utils.load_newest(self.acc_datapath + '.pkl')
+		
+		# process to sns form
 		d = pd.DataFrame()
 		for rel in acc:
 			for k in acc[rel]:
@@ -535,10 +694,11 @@ class engine(object):
 				hue_order=['X_orig', 'X_trunc', 'X_shuf', 'X_shuf_trunc'],
 				data=d[d.rel == rel], kind='bar',
 				palette='Set1')
-			g.savefig(path + 'fig_' + rel + self.last_filename + '.png',
-				dpi=600, bbox_inches='tight')
+			# g.savefig(path + 'fig_' + rel + self.last_filename + '.png',
+			# 	dpi=600, bbox_inches='tight')
+			utils.save_dt(g, self.fig_datapath + f'_{rel}.png', dpi=600, bbox_inches='tight')
 
-		logging.info('fig saved')
+		# logging.info('fig saved')
 
 	def plot_acc_f1(self, result_path):
 		d = utils.load_newest(result_path)
@@ -559,7 +719,7 @@ class engine(object):
 				for label in ax.get_xticklabels():
 					label.set_rotation(45)
 					label.set_ha('right')
-			filename = SemEval_LOGS_DATAPATH + f'fig_{self.params.dataset}_{self.params.probing_task}_{metric}{"_causal" if only_causal else ""}_{self.params.seed}.png'
+			filename = LOGS_PATH + f'fig_{self.params.dataset}_{self.params.probing_task}_{metric}{"_causal" if only_causal else ""}_{self.params.seed}.png'
 			# plt.savefig(filename, dpi=600, bbox_inches='tight')
 			# plt.show()
 			utils.save_dt(plt, filename, dpi=600, bbox_inches='tight')
@@ -567,3 +727,22 @@ class engine(object):
 		plot_metric(d, 'balanced_accuracy', False)
 		plot_metric(d, 'f1', True)
 		plot_metric(d, 'balanced_accuracy', True)
+
+	def plot_metrics(self, fig_datapath):
+		g = sns.catplot(y='value', x='metric', hue='model', data=self.result, kind='bar')
+		def rotate_xlabels(g):
+			for ax in g.axes.flat: 
+				for label in ax.get_xticklabels():
+					label.set_rotation(45)
+					label.set_ha('right')
+		def show_values_on_bars(g, height_adjust=1):
+			for ax in g.axes.flat: 
+				max_y = max([p.get_y() + p.get_height() for p in ax.patches])
+				for p in ax.patches:
+					_x = p.get_x() + p.get_width() / 2
+					_y = p.get_y() + p.get_height() + max_y * height_adjust/100
+					value = '{:.2f}'.format(p.get_height())
+					ax.text(_x, _y, value, ha="center") 
+		rotate_xlabels(g)
+		show_values_on_bars(g, 3)
+		utils.save_dt(g, fig_datapath)
