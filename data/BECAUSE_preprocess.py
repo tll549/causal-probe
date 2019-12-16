@@ -6,6 +6,9 @@ import os
 import glob
 import nltk
 
+import pandas as pd
+from causal_probe import utils
+
 def get_args():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-raw_data_path', type=str, 
@@ -26,12 +29,6 @@ class DataLoader(object):
         self.pos_samples = []
 
     def read(self, path):
-        # self.source = source
-        # if source != 'all':
-        #     path = path + '/' + source
-        # elif source == 'all':
-        #     path = path + '/' + source
-
         all_txt = glob.glob(os.path.join(path + '/CongressionalHearings/*.txt')) + \
             glob.glob(os.path.join(path + '/MASC/*.txt'))
         all_ann = glob.glob(os.path.join(path + '/CongressionalHearings/*.ann')) + \
@@ -64,12 +61,6 @@ class DataLoader(object):
             causal_tags_idx = [[tag2idx[tag] for tag in ct] for ct in causal_tags]
 
             # process paragraph (call it sentences here)
-            # if self.source == 'CongressionalHearings':
-            #     all_br = [i for i in range(len(txt)) if txt[i] == '\n']
-            #     sentence_start_end = [(br1+1, br2) for br1, br2 in zip([0] + all_br[:-1], all_br)] # find the index of where a sentence start and end
-            #     sentences = [[i[0], i[1], txt[i[0]:i[1]]] for i in sentence_start_end] # in the format of [start_idx, end_idx, sentence]
-            #     sentences = [s for s in sentences if s[2] != ''] # remove empty
-            # else:
             txt = re.sub(r'\n\t\t\t\t', '     ', txt)
             txt = re.sub(r'\n\t\t\t',   '\n   ', txt)
             txt = re.sub(r'\t', ' ', txt)
@@ -111,6 +102,9 @@ class DataLoader(object):
             # break
 
         logging.info(f'number of y == 1: {sum(self.y)}, 0: {len(self.y)-sum(self.y)}')
+        self.output = pd.DataFrame()
+        self.output['X'] = self.X
+        self.output['causal'] = self.y
 
     def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
         random.seed(seed)
@@ -134,6 +128,9 @@ class DataLoader(object):
             for i in self.test_idx:
                 f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\n')
         logging.info(f'data wrote')
+
+    def save_output(self, save_path):
+        utils.save_dt(self.output, save_path, index=False)
 
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)

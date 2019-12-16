@@ -63,6 +63,8 @@ def get_args():
                         help='batch size (default: 128)')
 
     # classifier parameters
+    parser.add_argument('-use_pytorch', action='store_true',
+                        help='use pytorch MLP classifier or sklearn logistic regression')
     # parser.add_argument('-nhid', type=int, default=0,
     #                     help='number of hidden units (0: Logistic Regression, >0: MLP); Default nonlinearity: Tanh')
     parser.add_argument('-optim', type=str, default='rmsprop',
@@ -290,6 +292,7 @@ if __name__ == '__main__':
         # print(results)
 
         params = {
+            'use_pytorch': args.use_pytorch,
             'trial': args.trial,
             'probing_task': args.probe,
             'dataset': args.dataset,

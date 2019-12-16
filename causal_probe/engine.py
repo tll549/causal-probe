@@ -4,16 +4,18 @@ import pandas as pd
 import logging
 import os
 import re
-import pickle
 
 from causal_probe import utils
 from data import SemEval_preprocess
 from data import feature_preprocess # also for SemEval
 from data import ROC_preprocess
+from data import BECAUSE_preprocess
 
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
+
+from causal_probe.classifier import MLP
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -27,6 +29,9 @@ SEMEVAL_DATA = 'TRAIN_FILE.TXT' # 'data/causal_probing/SemEval_2010_8/raw/TRAIN_
 
 ROC_PATH = 'ROCStories'
 ROC_DATA = 'ROCstories-20191212T222034Z-001.zip' # 'data/causal_probing/ROCStories/ROCstories-20191212T222034Z-001.zip'
+
+BECAUSE_PATH = 'BECAUSE'
+# BECAUSE_DATA path is specify in BECAUSE_preprocess
 
 OANC_DATA = 'OANC_GrAF.zip' # 'data/causal_probing/OANC_GrAF.zip'
 
@@ -55,22 +60,27 @@ class engine(object):
 		# raw data path
 		if self.params.dataset == 'semeval':
 			self.raw_datapath = os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA)
+		elif self.params.dataset == 'because':
+			self.raw_datapath = os.path.join(DATAPATH, BECAUSE_PATH)
 		elif self.params.dataset == 'roc':
 			self.raw_datapath = os.path.join(DATAPATH, ROC_PATH, ROC_DATA)
 
 		# processed data path, encoded data path, result csv data path, and fig data path
 		if self.params.probing_task == 'simple':
-			config_filename = '_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)])
+			config_filename = ('TRIAL_' if self.params.trial else '') + \
+				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)])
 			if self.params.dataset == 'semeval':
 				dataset_path = SEMEVAL_PATH
+			elif self.params.dataset == 'because':
+				dataset_path = BECAUSE_PATH
 			elif self.params.dataset == 'roc':
 				dataset_path = ROC_PATH
 
 			# universal setting?
 			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
-				f'{self.params.probing_task}.csv')
+				f'{self.params.probing_task}.csv') # should also use config_filename?
 			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
-				f'{self.params.probing_task}')
+				f'{self.params.probing_task}') # should also use config_filename?
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
 			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}.png')
 
@@ -185,6 +195,12 @@ class engine(object):
 				dl = SemEval_preprocess.DataLoader()
 				dl.read(self.raw_datapath)
 				dl.preprocess(probing_task='simple')
+
+			elif self.params.dataset == 'because':
+				dl = BECAUSE_preprocess.DataLoader()
+				dl.read(self.raw_datapath)
+				dl.preprocess()
+
 			elif self.params.dataset == 'roc':
 				dl = ROC_preprocess.DataLoader()
 				dl.read(self.raw_datapath)
@@ -636,23 +652,59 @@ class engine(object):
 		warnings.filterwarnings("ignore", category=ConvergenceWarning)
 		warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
+		from sklearn.model_selection import train_test_split
+
 		X = embeddings
 		y = np.array(y)
 		assert X.shape[0] == len(y), f'X shape {X.shape} and y len {len(y)} not compatible'
 
-		clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed,
-			class_weight='balanced', max_iter=1000) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
-		
-		if len(np.unique(y)) == 2: # binary
-			scoring = ('accuracy', 'balanced_accuracy', 'f1', 
-				'precision', 'recall', 'roc_auc')
-		else: # multiclass
-			scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted')
-		cv_results = cross_validate(clf, X, y, cv=self.params.cv, error_score='raise', scoring=scoring,
-			n_jobs=5) # error_score=np.nan
+		logging.info('start training...')
+		if self.params.use_pytorch:
+			# TODO default settings, should be add to argparse too
+			# self.classifier_config = config['classifier']
+			self.classifier_config = {'nhid': 0} # will use default settings in MLP?, nhid = 0 means logistic regression
+			self.featdim = X.shape[1]
+			self.nclasses = len(np.unique(y))
+			reg = 1e-9 # no reg, or for reg in [10**t for t in range(-5, -1)]
+			self.cudaEfficient = False # if 'cudaEfficient' not in config else \
+				# config['cudaEfficient']
 
-		result_raw = [{'metric': k, 'value': v} for k in scoring for v in cv_results[f'test_{k}']]
-		return result_raw
+			X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=self.params.seed)
+			X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=self.params.seed)
+			# print(X_train[0, :5], X_val[0, :5], X_test[0, :5])
+			# print(y_train[:5], y_val[:5], y_test[:5])
+			# print(np.sum(y_train), np.sum(y_val), np.sum(y_test))
+			# print(self.nclasses, np.unique(y))
+
+			clf = MLP(self.classifier_config, inputdim=self.featdim,
+				nclasses=self.nclasses, l2reg=reg,
+				seed=self.params.seed, cudaEfficient=self.cudaEfficient)
+			clf.fit(X_train, y_train, validation_data=(X_val, y_val))
+			print(round(100 * clf.score(X_val, y_val), 2))
+
+
+			logging.info('done training')
+			return
+
+		else: # sklearn
+			# SentEval use
+			# LogisticRegression(C=reg, random_state=self.seed) 
+			# reg = [2**t for t in range(-2, 4, 1)]
+			clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed,
+				class_weight='balanced', 
+				max_iter=1000) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
+			
+			if len(np.unique(y)) == 2: # binary
+				scoring = ('accuracy', 'balanced_accuracy', 'f1', 
+					'precision', 'recall', 'roc_auc')
+			else: # multiclass
+				scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted')
+			cv_results = cross_validate(clf, X, y, cv=self.params.cv, error_score='raise', scoring=scoring,
+				n_jobs=5) # error_score=np.nan
+
+			result_raw = [{'metric': k, 'value': v} for k in scoring for v in cv_results[f'test_{k}']]
+			logging.info('done training')
+			return result_raw
 
 	def save_pred_mask(self):
 		lines_pred = ['\t'.join([str(x) for x in l]) + '\n' for l in self.pred]
@@ -663,24 +715,7 @@ class engine(object):
 		utils.save_dt(lines_acc, self.acc_datapath + '.txt')
 		utils.save_dt(self.acc, self.acc_datapath + '.pkl')
 
-		# with open(log_path + 'result' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
-		# 	for l in self.pred:
-		# 		o = '\t'.join([str(x) for x in l]) + '\n'
-		# 		f.write(o)
-		# with open(log_path + 'result' + self.last_filename + '.pkl', 'wb') as f:
-		# 	pickle.dump(self.pred, f)
-
-		# with open(log_path + 'acc' + self.last_filename + '.txt', 'w+', encoding='utf-8') as f:
-		# 	for k, v in self.acc.items():
-		# 		f.write(k + ' : ' + str(v) + '\n')
-		# with open(log_path + 'acc' + self.last_filename + '.pkl', 'wb') as f:
-		# 	pickle.dump(self.acc, f)
-
-		# logging.info('files saved')
-
 	def plot_acc_mask(self):
-		# with open(path + 'acc' + self.last_filename + '.pkl', 'rb') as f:
-		# 	acc = pickle.load(f)
 		acc = utils.load_newest(self.acc_datapath + '.pkl')
 		
 		# process to sns form
