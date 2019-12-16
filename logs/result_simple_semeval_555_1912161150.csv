@@ -1,0 +1,5 @@
+,model,metric,split,value
+0,bert,accuracy,dev,0.9430132708821234
+1,bert,accuracy,test,0.9437148217636022
+2,glove,accuracy,dev,0.8672911787665886
+3,glove,accuracy,test,0.8749218261413383

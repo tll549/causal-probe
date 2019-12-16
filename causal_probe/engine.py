@@ -141,7 +141,7 @@ class engine(object):
 				for r in result_raw:
 					r['model'] = model
 				self.result += result_raw
-			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'value'])
+			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'split', 'value'])
 			utils.save_dt(self.result, self.result_datapath)
 			# print(self.result)
 
@@ -653,6 +653,7 @@ class engine(object):
 		warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 		from sklearn.model_selection import train_test_split
+		from sklearn.model_selection import StratifiedKFold
 
 		X = embeddings
 		y = np.array(y)
@@ -665,33 +666,60 @@ class engine(object):
 			self.classifier_config = {'nhid': 0} # will use default settings in MLP?, nhid = 0 means logistic regression
 			self.featdim = X.shape[1]
 			self.nclasses = len(np.unique(y))
-			reg = 1e-9 # no reg, or for reg in [10**t for t in range(-5, -1)]
-			self.cudaEfficient = False # if 'cudaEfficient' not in config else \
-				# config['cudaEfficient']
+			# reg = 1e-9 # no reg, or for reg in [10**t for t in range(-5, -1)]
+			self.cudaEfficient = False # if 'cudaEfficient' not in config else config['cudaEfficient']
 
-			X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=self.params.seed)
-			X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=self.params.seed)
-			# print(X_train[0, :5], X_val[0, :5], X_test[0, :5])
-			# print(y_train[:5], y_val[:5], y_test[:5])
-			# print(np.sum(y_train), np.sum(y_val), np.sum(y_test))
-			# print(self.nclasses, np.unique(y))
+			# train dev test split once
+			# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=self.params.seed)
+			# X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=self.params.seed)
 
-			clf = MLP(self.classifier_config, inputdim=self.featdim,
-				nclasses=self.nclasses, l2reg=reg,
-				seed=self.params.seed, cudaEfficient=self.cudaEfficient)
-			clf.fit(X_train, y_train, validation_data=(X_val, y_val))
-			print(round(100 * clf.score(X_val, y_val), 2))
+			# train dev test split k-fold
+			result_raw = []
+			skf = StratifiedKFold(n_splits=self.params.cv, shuffle=True, random_state=self.params.seed)
+			skf.get_n_splits(X, y)
+			for train_index, test_index in skf.split(X, y):
+				X_train, X_test = X[train_index], X[test_index]
+				y_train, y_test = y[train_index], y[test_index]
+				X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=self.params.seed)
+				# print(X_train.shape, X_val.shape, X_test.shape)
 
+				# training
+				regs = [10**t for t in range(-5, -1)] 
+				scores = []
+				for reg in regs:
+					clf = MLP(self.classifier_config, inputdim=self.featdim,
+						nclasses=self.nclasses, l2reg=reg,
+						seed=self.params.seed, cudaEfficient=self.cudaEfficient)
+					clf.fit(X_train, y_train, validation_data=(X_val, y_val))
+					scores.append(clf.score(X_val, y_val))
+				logging.info([('reg:' + str(regs[idx]), scores[idx]) for idx in range(len(scores))])
+				optreg = regs[np.argmax(scores)]
+				devaccuracy = np.max(scores)
+				logging.info('Validation : best param found is reg = {0} with score {1}'.format(optreg, devaccuracy))
 
-			logging.info('done training')
-			return
+				# re train
+				clf = MLP(self.classifier_config, inputdim=self.featdim,
+					nclasses=self.nclasses, l2reg=optreg,
+					seed=self.params.seed, cudaEfficient=self.cudaEfficient)
+				clf.fit(X_train, y_train, validation_data=(X_val, y_val))
 
-		else: # sklearn
+				# test
+				testaccuracy = clf.score(X_test, y_test)
+
+				result_raw += [
+					{'metric': 'accuracy', 'split': 'dev', 'value': devaccuracy},
+					{'metric': 'accuracy', 'split': 'test', 'value': testaccuracy}]
+			
+			# print(result_raw)
+			logging.info('done testing')
+			return result_raw
+
+		else: # use sklearn
 			# SentEval use
 			# LogisticRegression(C=reg, random_state=self.seed) 
 			# reg = [2**t for t in range(-2, 4, 1)]
 			clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed,
-				class_weight='balanced', 
+				class_weight='balanced', # TODO not sure
 				max_iter=1000) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
 			
 			if len(np.unique(y)) == 2: # binary
@@ -766,7 +794,10 @@ class engine(object):
 		plot_metric(d, 'balanced_accuracy', True)
 
 	def plot_metrics(self, fig_datapath):
-		g = sns.catplot(y='value', x='metric', hue='model', data=self.result, kind='bar')
+		if self.params.use_pytorch:
+			g = sns.catplot(y='value', x='split', hue='model', data=self.result, kind='bar')
+		else:
+			g = sns.catplot(y='value', x='metric', hue='model', data=self.result, kind='bar')
 		def rotate_xlabels(g):
 			for ax in g.axes.flat: 
 				for label in ax.get_xticklabels():
