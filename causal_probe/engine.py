@@ -183,10 +183,12 @@ class engine(object):
 		if self.params.probing_task == 'simple':
 			if self.params.dataset == 'semeval':
 				dl = SemEval_preprocess.DataLoader()
+				dl.read(self.raw_datapath)
+				dl.preprocess(probing_task='simple')
 			elif self.params.dataset == 'roc':
 				dl = ROC_preprocess.DataLoader()
-			dl.read(self.raw_datapath)
-			dl.preprocess(trial=self.params.trial)
+				dl.read(self.raw_datapath)
+				dl.preprocess(trial=self.params.trial)
 			dl.save_output(self.processed_datapath)
 
 		elif self.params.probing_task == 'mask':

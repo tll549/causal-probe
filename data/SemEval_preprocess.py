@@ -2,6 +2,9 @@ import re
 import logging
 import random
 
+import pandas as pd
+from causal_probe import utils
+
 class DataLoader(object):
     def __init__(self):
         self.X, self.y = [], []
@@ -31,6 +34,10 @@ class DataLoader(object):
             self.X = [x[1:-1] for x in self.X]
             # retain y as only causal or not
             self.y = [int('Cause-Effect' in e) for e in self.y]
+
+            self.output = pd.DataFrame()
+            self.output['X'] = self.X
+            self.output['causal'] = self.y
         if probing_task == 'mask':
             all_relations_dict = {k:re.sub(r'\(e\d,e\d\)', '', k) for k in list(set(self.y))}
 
@@ -74,7 +81,8 @@ class DataLoader(object):
                 f.write(f'te\t{self.y[i]}\t[CLS] {self.X[i]} [SEP]\t{self.rel[i]}\n')
         logging.info(f'data wrote')
 
-
+    def save_output(self, data_path):
+        utils.save_dt(self.output, data_path, index=False)
 
 # logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
