@@ -328,6 +328,7 @@ if __name__ == '__main__':
 
     elif args.probe == 'feature':
         params = {
+            'use_pytorch': args.use_pytorch,
             'trial': args.trial,
             'probing_task': args.probe,
             'dataset': args.dataset,

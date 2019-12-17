@@ -97,14 +97,30 @@ class engine(object):
 			self.fig_datapath = os.path.join(LOGS_PATH, 'fig_' + config_filename)
 
 		elif self.params.probing_task == 'feature':
+			config_filename = ('TRIAL_' if self.params.trial else '') + \
+				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)])
 			if self.params.dataset == 'semeval':
-				self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
-				self.encoded_datapath = SemEval_feature_ENCODED_DATAPATH
+				dataset_path = SEMEVAL_PATH
+			# elif self.params.dataset == 'because':
+			# 	dataset_path = BECAUSE_PATH
 			elif self.params.dataset == 'roc':
-				self.processed_datapath = ROC_feature_PROCESSED_DATAPATH
-				self.encoded_datapath = ROC_feature_ENCODED_DATAPATH
+				dataset_path = ROC_PATH
 
-			self.result_datapath = LOGS_PATH + f'{self.params.dataset}_feature_result.csv'
+			# if self.params.dataset == 'semeval':
+			# 	self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
+			# 	self.encoded_datapath = SemEval_feature_ENCODED_DATAPATH
+			# elif self.params.dataset == 'roc':
+			# 	self.processed_datapath = ROC_feature_PROCESSED_DATAPATH
+			# 	self.encoded_datapath = ROC_feature_ENCODED_DATAPATH
+
+			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
+				f'{self.params.probing_task}.csv')  # should also use config_filename?
+			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
+				f'{self.params.probing_task}') # should also use config_filename?
+
+			# self.result_datapath = LOGS_PATH + f'{self.params.dataset}_feature_result.csv'
+			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
+			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}')
 
 			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
 				# 'probabilistic_causality', 
@@ -157,9 +173,10 @@ class engine(object):
 			if self.params.pretrained.model == 'bert': # or both
 				# self.encode_data_bert(self.encoded_datapath)
 				if self.params.reset_data:
-					self.encode_data_bert(self.encoded_datapath)
-				else:
-					self.load_encoded_data(self.encoded_datapath)
+					self.encode('bert', self.encoded_datapath + '_bert.pkl')
+				# self.load_encoded_data(self.encoded_datapath + '_bert.pkl')
+				self.embeddings = utils.load_newest(self.encoded_datapath + '_bert.pkl')
+
 				logging.info('start predicting by bert...')
 				self.predict_feature(cv=self.params.cv)
 
@@ -167,8 +184,10 @@ class engine(object):
 				self.result_bert_glove = self.result.copy()
 
 			if self.params.pretrained.model == 'glove' or self.params.pretrained.both_bert_glove:
-				# if self.params.reset_data:
-				self.encode_data_glove(self.encoded_datapath)
+				if self.params.reset_data:
+					self.encode('glove', self.encoded_datapath + '_glove.pkl')
+				# self.load_encoded_data(self.encoded_datapath + '_glove.pkl')
+				self.embeddings = utils.load_newest(self.encoded_datapath + '_glove.pkl')
 				# else:
 				# 	self.load_encoded_data(self.encoded_datapath)
 
@@ -183,7 +202,10 @@ class engine(object):
 
 			utils.save_dt(self.result_bert_glove, self.result_datapath)
 
-			self.plot_acc_f1(self.result_datapath)
+			if self.params.use_pytorch:
+				self.plot_feature_acc_by_rel(self.result_datapath, self.fig_datapath)
+			else:
+				self.plot_acc_f1(self.result_datapath)
 
 		# elif self.params.probing_task == 'choice':
 		# 	print('123')
@@ -499,19 +521,19 @@ class engine(object):
 		logging.info(f'data encoded by {model}, embeddings shape: {embeddings.shape}')
 		# return embeddings
 
-	# obsolete ↓↓
-	def encode_data_bert(self, save_path):
-		self.embeddings = self.encode(self, 'bert', save_path)
-		return
+	# # obsolete ↓↓
+	# def encode_data_bert(self, save_path):
+	# 	self.embeddings = self.encode('bert', save_path)
+	# 	return
 
-	def encode_data_glove(self, save_path):
-		self.embeddings = self.encode(self, 'glove', save_path)
-		return
+	# def encode_data_glove(self, save_path):
+	# 	self.embeddings = self.encode('glove', save_path)
+	# 	return
 
-	def load_encoded_data(self, save_path):
-		self.embeddings = utils.load_newest(save_path)
-		logging.info(f'loaded, embeddings shape {self.embeddings.shape}')
-	# obsolete ↑↑
+	# def load_encoded_data(self, save_path):
+	# 	self.embeddings = utils.load_newest(save_path)
+	# 	logging.info(f'loaded, embeddings shape {self.embeddings.shape}')
+	# # obsolete ↑↑
 
 
 	def predict_mask(self):
@@ -592,10 +614,10 @@ class engine(object):
 		from sklearn.utils.testing import ignore_warnings
 		from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
 
-		import warnings
-		warnings.filterwarnings("ignore", category=FutureWarning)
-		warnings.filterwarnings("ignore", category=ConvergenceWarning)
-		warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+		# import warnings
+		# warnings.filterwarnings("ignore", category=FutureWarning)
+		# warnings.filterwarnings("ignore", category=ConvergenceWarning)
+		# warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 		result = []
 		for rel in self.data.relation.unique():
@@ -610,28 +632,35 @@ class engine(object):
 					print(y.value_counts())
 					print()
 					continue
-				y = np.array(y)
-				# print(rel, X.shape, y.shape, y_name)
 
-				clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
+				if self.params.use_pytorch:
+					result_raw = self.train(X, y)
+					for r in result_raw:
+						r.update({'relation': rel, 'y_type': y_name})
+					print(result_raw)
+					result += result_raw
 
-				if len(np.unique(y)) == 2:
-					scoring = ('accuracy', 'balanced_accuracy', 'f1', 
-						'precision', 'recall', 'roc_auc')
-				else:
-					scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted', 
-						# 'roc_auc_ovr', 'roc_auc_ovo', 'roc_auc_ovr_weighted', 'roc_auc_ovo_weighted'
-						)
-				# print(type(X), type(y))
-				cv_results = cross_validate(clf, X, y, cv=cv, error_score='raise',
-					scoring=scoring) # error_score=np.nan
-				clf.fit(X, y)
+				else: # original, should be merge into train()
+					y = np.array(y)
 
-				# print(cv_results)
-				result_temp = {k:cv_results[f'test_{k}'].mean() for k in scoring}
-				result_temp.update({'relation': rel, 'y_type': y_name})
+					clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
 
-				result.append(result_temp)
+					if len(np.unique(y)) == 2:
+						scoring = ('accuracy', 'balanced_accuracy', 'f1', 
+							'precision', 'recall', 'roc_auc')
+					else:
+						scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted', 
+							# 'roc_auc_ovr', 'roc_auc_ovo', 'roc_auc_ovr_weighted', 'roc_auc_ovo_weighted'
+							)
+					# print(type(X), type(y))
+					cv_results = cross_validate(clf, X, y, cv=cv, error_score='raise',
+						scoring=scoring) # error_score=np.nan
+					clf.fit(X, y)
+
+					# print(cv_results)
+					result_temp = {k:cv_results[f'test_{k}'].mean() for k in scoring}
+					result_temp.update({'relation': rel, 'y_type': y_name})
+					result.append(result_temp)
 				# break
 			# break
 		self.result = pd.DataFrame(result)
@@ -793,6 +822,29 @@ class engine(object):
 		plot_metric(d, 'f1', True)
 		plot_metric(d, 'balanced_accuracy', True)
 
+	def plot_feature_acc_by_rel(self, result_path, fig_path):
+		def rotate_xlabels(g):
+			for ax in g.axes.flat: 
+				for label in ax.get_xticklabels():
+					label.set_rotation(45)
+					label.set_ha('right')
+		def show_values_on_bars(g, height_adjust=0):
+			for ax in g.axes.flat: 
+				max_y = max([p.get_y() + p.get_height() for p in ax.patches])
+				for p in ax.patches:
+					_x = p.get_x() + p.get_width() / 2
+					_y = p.get_y() + p.get_height() + max_y * height_adjust/100
+					value = '{:.2f}'.format(p.get_height())
+					ax.text(_x, _y, value, ha="center") 
+		self.result = utils.load_newest(result_path)
+		for rel in self.result.relation.unique():
+			g = sns.catplot(y='value', x='y_type', hue='model', 
+				data=self.result[self.result.relation == rel], 
+				kind='bar', col='split')
+			rotate_xlabels(g)
+			show_values_on_bars(g, 3)
+			utils.save_dt(g, fig_path + f'_{rel}.png')
+
 	def plot_metrics(self, fig_datapath):
 		if self.params.use_pytorch:
 			g = sns.catplot(y='value', x='split', hue='model', data=self.result, kind='bar')
@@ -803,7 +855,7 @@ class engine(object):
 				for label in ax.get_xticklabels():
 					label.set_rotation(45)
 					label.set_ha('right')
-		def show_values_on_bars(g, height_adjust=1):
+		def show_values_on_bars(g, height_adjust=0):
 			for ax in g.axes.flat: 
 				max_y = max([p.get_y() + p.get_height() for p in ax.patches])
 				for p in ax.patches:

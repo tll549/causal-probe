@@ -1,0 +1,161 @@
+,metric,relation,split,value,y_type,model
+0,accuracy,Cause-Effect,dev,0.3157894736842105,P(E|C),bert
+1,accuracy,Cause-Effect,test,0.2,P(E|C),bert
+2,accuracy,Cause-Effect,dev,0.2631578947368421,P(E|C),bert
+3,accuracy,Cause-Effect,test,0.16,P(E|C),bert
+4,accuracy,Cause-Effect,dev,0.3684210526315789,P(E|C),bert
+5,accuracy,Cause-Effect,test,0.3877551020408163,P(E|C),bert
+6,accuracy,Cause-Effect,dev,0.3333333333333333,P(E|C),bert
+7,accuracy,Cause-Effect,test,0.15555555555555556,P(E|C),bert
+8,accuracy,Cause-Effect,dev,0.358974358974359,P(E|C),bert
+9,accuracy,Cause-Effect,test,0.35555555555555557,P(E|C),bert
+10,accuracy,Cause-Effect,dev,0.2631578947368421,P(E),bert
+11,accuracy,Cause-Effect,test,0.3333333333333333,P(E),bert
+12,accuracy,Cause-Effect,dev,0.23684210526315788,P(E),bert
+13,accuracy,Cause-Effect,test,0.2857142857142857,P(E),bert
+14,accuracy,Cause-Effect,dev,0.3333333333333333,P(E),bert
+15,accuracy,Cause-Effect,test,0.2553191489361702,P(E),bert
+16,accuracy,Cause-Effect,dev,0.3333333333333333,P(E),bert
+17,accuracy,Cause-Effect,test,0.17391304347826086,P(E),bert
+18,accuracy,Cause-Effect,dev,0.20512820512820512,P(E),bert
+19,accuracy,Cause-Effect,test,0.3695652173913043,P(E),bert
+20,accuracy,Cause-Effect,dev,0.39473684210526316,probabilistic_causality_diff,bert
+21,accuracy,Cause-Effect,test,0.24,probabilistic_causality_diff,bert
+22,accuracy,Cause-Effect,dev,0.3157894736842105,probabilistic_causality_diff,bert
+23,accuracy,Cause-Effect,test,0.26,probabilistic_causality_diff,bert
+24,accuracy,Cause-Effect,dev,0.4473684210526316,probabilistic_causality_diff,bert
+25,accuracy,Cause-Effect,test,0.20408163265306123,probabilistic_causality_diff,bert
+26,accuracy,Cause-Effect,dev,0.358974358974359,probabilistic_causality_diff,bert
+27,accuracy,Cause-Effect,test,0.28888888888888886,probabilistic_causality_diff,bert
+28,accuracy,Cause-Effect,dev,0.3076923076923077,probabilistic_causality_diff,bert
+29,accuracy,Cause-Effect,test,0.3333333333333333,probabilistic_causality_diff,bert
+30,accuracy,Cause-Effect,dev,0.39473684210526316,delta_P,bert
+31,accuracy,Cause-Effect,test,0.24,delta_P,bert
+32,accuracy,Cause-Effect,dev,0.3157894736842105,delta_P,bert
+33,accuracy,Cause-Effect,test,0.26,delta_P,bert
+34,accuracy,Cause-Effect,dev,0.4473684210526316,delta_P,bert
+35,accuracy,Cause-Effect,test,0.20408163265306123,delta_P,bert
+36,accuracy,Cause-Effect,dev,0.358974358974359,delta_P,bert
+37,accuracy,Cause-Effect,test,0.28888888888888886,delta_P,bert
+38,accuracy,Cause-Effect,dev,0.3076923076923077,delta_P,bert
+39,accuracy,Cause-Effect,test,0.3333333333333333,delta_P,bert
+40,accuracy,Cause-Effect,dev,0.2894736842105263,P(E|no C),bert
+41,accuracy,Cause-Effect,test,0.24,P(E|no C),bert
+42,accuracy,Cause-Effect,dev,0.34210526315789475,P(E|no C),bert
+43,accuracy,Cause-Effect,test,0.28,P(E|no C),bert
+44,accuracy,Cause-Effect,dev,0.2564102564102564,P(E|no C),bert
+45,accuracy,Cause-Effect,test,0.2916666666666667,P(E|no C),bert
+46,accuracy,Cause-Effect,dev,0.358974358974359,P(E|no C),bert
+47,accuracy,Cause-Effect,test,0.2391304347826087,P(E|no C),bert
+48,accuracy,Cause-Effect,dev,0.358974358974359,P(E|no C),bert
+49,accuracy,Cause-Effect,test,0.26666666666666666,P(E|no C),bert
+50,accuracy,Cause-Effect,dev,0.39473684210526316,q,bert
+51,accuracy,Cause-Effect,test,0.24,q,bert
+52,accuracy,Cause-Effect,dev,0.3157894736842105,q,bert
+53,accuracy,Cause-Effect,test,0.26,q,bert
+54,accuracy,Cause-Effect,dev,0.4473684210526316,q,bert
+55,accuracy,Cause-Effect,test,0.20408163265306123,q,bert
+56,accuracy,Cause-Effect,dev,0.358974358974359,q,bert
+57,accuracy,Cause-Effect,test,0.28888888888888886,q,bert
+58,accuracy,Cause-Effect,dev,0.3076923076923077,q,bert
+59,accuracy,Cause-Effect,test,0.3333333333333333,q,bert
+60,accuracy,Cause-Effect,dev,0.34210526315789475,p,bert
+61,accuracy,Cause-Effect,test,0.3673469387755102,p,bert
+62,accuracy,Cause-Effect,dev,0.39473684210526316,p,bert
+63,accuracy,Cause-Effect,test,0.2653061224489796,p,bert
+64,accuracy,Cause-Effect,dev,0.39473684210526316,p,bert
+65,accuracy,Cause-Effect,test,0.2653061224489796,p,bert
+66,accuracy,Cause-Effect,dev,0.2564102564102564,p,bert
+67,accuracy,Cause-Effect,test,0.3541666666666667,p,bert
+68,accuracy,Cause-Effect,dev,0.23076923076923078,p,bert
+69,accuracy,Cause-Effect,test,0.2727272727272727,p,bert
+70,accuracy,Cause-Effect,dev,0.3157894736842105,causal_power,bert
+71,accuracy,Cause-Effect,test,0.3,causal_power,bert
+72,accuracy,Cause-Effect,dev,0.23684210526315788,causal_power,bert
+73,accuracy,Cause-Effect,test,0.34,causal_power,bert
+74,accuracy,Cause-Effect,dev,0.3684210526315789,causal_power,bert
+75,accuracy,Cause-Effect,test,0.16326530612244897,causal_power,bert
+76,accuracy,Cause-Effect,dev,0.2564102564102564,causal_power,bert
+77,accuracy,Cause-Effect,test,0.24444444444444444,causal_power,bert
+78,accuracy,Cause-Effect,dev,0.3076923076923077,causal_power,bert
+79,accuracy,Cause-Effect,test,0.26666666666666666,causal_power,bert
+80,accuracy,Cause-Effect,dev,0.21052631578947367,P(E|C),glove
+81,accuracy,Cause-Effect,test,0.2,P(E|C),glove
+82,accuracy,Cause-Effect,dev,0.15789473684210525,P(E|C),glove
+83,accuracy,Cause-Effect,test,0.18,P(E|C),glove
+84,accuracy,Cause-Effect,dev,0.15789473684210525,P(E|C),glove
+85,accuracy,Cause-Effect,test,0.14285714285714285,P(E|C),glove
+86,accuracy,Cause-Effect,dev,0.1794871794871795,P(E|C),glove
+87,accuracy,Cause-Effect,test,0.15555555555555556,P(E|C),glove
+88,accuracy,Cause-Effect,dev,0.2564102564102564,P(E|C),glove
+89,accuracy,Cause-Effect,test,0.2222222222222222,P(E|C),glove
+90,accuracy,Cause-Effect,dev,0.23684210526315788,P(E),glove
+91,accuracy,Cause-Effect,test,0.21568627450980393,P(E),glove
+92,accuracy,Cause-Effect,dev,0.21052631578947367,P(E),glove
+93,accuracy,Cause-Effect,test,0.16326530612244897,P(E),glove
+94,accuracy,Cause-Effect,dev,0.23076923076923078,P(E),glove
+95,accuracy,Cause-Effect,test,0.1702127659574468,P(E),glove
+96,accuracy,Cause-Effect,dev,0.23076923076923078,P(E),glove
+97,accuracy,Cause-Effect,test,0.1956521739130435,P(E),glove
+98,accuracy,Cause-Effect,dev,0.15384615384615385,P(E),glove
+99,accuracy,Cause-Effect,test,0.21739130434782608,P(E),glove
+100,accuracy,Cause-Effect,dev,0.21052631578947367,probabilistic_causality_diff,glove
+101,accuracy,Cause-Effect,test,0.22,probabilistic_causality_diff,glove
+102,accuracy,Cause-Effect,dev,0.21052631578947367,probabilistic_causality_diff,glove
+103,accuracy,Cause-Effect,test,0.22,probabilistic_causality_diff,glove
+104,accuracy,Cause-Effect,dev,0.21052631578947367,probabilistic_causality_diff,glove
+105,accuracy,Cause-Effect,test,0.22448979591836735,probabilistic_causality_diff,glove
+106,accuracy,Cause-Effect,dev,0.23076923076923078,probabilistic_causality_diff,glove
+107,accuracy,Cause-Effect,test,0.17777777777777778,probabilistic_causality_diff,glove
+108,accuracy,Cause-Effect,dev,0.3333333333333333,probabilistic_causality_diff,glove
+109,accuracy,Cause-Effect,test,0.2222222222222222,probabilistic_causality_diff,glove
+110,accuracy,Cause-Effect,dev,0.21052631578947367,delta_P,glove
+111,accuracy,Cause-Effect,test,0.22,delta_P,glove
+112,accuracy,Cause-Effect,dev,0.21052631578947367,delta_P,glove
+113,accuracy,Cause-Effect,test,0.22,delta_P,glove
+114,accuracy,Cause-Effect,dev,0.21052631578947367,delta_P,glove
+115,accuracy,Cause-Effect,test,0.22448979591836735,delta_P,glove
+116,accuracy,Cause-Effect,dev,0.23076923076923078,delta_P,glove
+117,accuracy,Cause-Effect,test,0.17777777777777778,delta_P,glove
+118,accuracy,Cause-Effect,dev,0.3333333333333333,delta_P,glove
+119,accuracy,Cause-Effect,test,0.2222222222222222,delta_P,glove
+120,accuracy,Cause-Effect,dev,0.2631578947368421,P(E|no C),glove
+121,accuracy,Cause-Effect,test,0.24,P(E|no C),glove
+122,accuracy,Cause-Effect,dev,0.34210526315789475,P(E|no C),glove
+123,accuracy,Cause-Effect,test,0.28,P(E|no C),glove
+124,accuracy,Cause-Effect,dev,0.23076923076923078,P(E|no C),glove
+125,accuracy,Cause-Effect,test,0.22916666666666666,P(E|no C),glove
+126,accuracy,Cause-Effect,dev,0.23076923076923078,P(E|no C),glove
+127,accuracy,Cause-Effect,test,0.2608695652173913,P(E|no C),glove
+128,accuracy,Cause-Effect,dev,0.28205128205128205,P(E|no C),glove
+129,accuracy,Cause-Effect,test,0.13333333333333333,P(E|no C),glove
+130,accuracy,Cause-Effect,dev,0.21052631578947367,q,glove
+131,accuracy,Cause-Effect,test,0.22,q,glove
+132,accuracy,Cause-Effect,dev,0.21052631578947367,q,glove
+133,accuracy,Cause-Effect,test,0.22,q,glove
+134,accuracy,Cause-Effect,dev,0.21052631578947367,q,glove
+135,accuracy,Cause-Effect,test,0.22448979591836735,q,glove
+136,accuracy,Cause-Effect,dev,0.23076923076923078,q,glove
+137,accuracy,Cause-Effect,test,0.17777777777777778,q,glove
+138,accuracy,Cause-Effect,dev,0.3333333333333333,q,glove
+139,accuracy,Cause-Effect,test,0.2222222222222222,q,glove
+140,accuracy,Cause-Effect,dev,0.21052631578947367,p,glove
+141,accuracy,Cause-Effect,test,0.20408163265306123,p,glove
+142,accuracy,Cause-Effect,dev,0.2631578947368421,p,glove
+143,accuracy,Cause-Effect,test,0.16326530612244897,p,glove
+144,accuracy,Cause-Effect,dev,0.2631578947368421,p,glove
+145,accuracy,Cause-Effect,test,0.20408163265306123,p,glove
+146,accuracy,Cause-Effect,dev,0.20512820512820512,p,glove
+147,accuracy,Cause-Effect,test,0.16666666666666666,p,glove
+148,accuracy,Cause-Effect,dev,0.20512820512820512,p,glove
+149,accuracy,Cause-Effect,test,0.2727272727272727,p,glove
+150,accuracy,Cause-Effect,dev,0.3157894736842105,causal_power,glove
+151,accuracy,Cause-Effect,test,0.26,causal_power,glove
+152,accuracy,Cause-Effect,dev,0.15789473684210525,causal_power,glove
+153,accuracy,Cause-Effect,test,0.18,causal_power,glove
+154,accuracy,Cause-Effect,dev,0.18421052631578946,causal_power,glove
+155,accuracy,Cause-Effect,test,0.20408163265306123,causal_power,glove
+156,accuracy,Cause-Effect,dev,0.1282051282051282,causal_power,glove
+157,accuracy,Cause-Effect,test,0.2,causal_power,glove
+158,accuracy,Cause-Effect,dev,0.20512820512820512,causal_power,glove
+159,accuracy,Cause-Effect,test,0.15555555555555556,causal_power,glove
