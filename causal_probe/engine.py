@@ -7,13 +7,14 @@ import re
 
 from causal_probe import utils
 from data import SemEval_preprocess
-from data import feature_preprocess # also for SemEval
+from data import SemEval_feature_preprocess
 from data import ROC_preprocess
 from data import BECAUSE_preprocess
 
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
+from transformers import GPT2Tokenizer, GPT2Model
 
 from causal_probe.classifier import MLP
 
@@ -147,10 +148,11 @@ class engine(object):
 
 		if self.params.probing_task == 'simple':
 			self.result = []
-			for model in ['bert', 'glove']:
-				if self.params.reset_data:
-					self.encode(model, self.encoded_datapath + f'_{model}.pkl')
-				embeddings = utils.load_newest(self.encoded_datapath + f'_{model}.pkl')
+			for model in ['bert', 'glove', 'gpt2']:
+				encoded_model_path = self.encoded_datapath + f'_{model}.pkl'
+				if self.params.reencode_data:
+					self.encode(model, encoded_model_path)
+				embeddings = utils.load_newest(encoded_model_path)
 				logging.info(f'all encoded data loaded')
 
 				result_raw = self.train(embeddings, self.data.causal)
@@ -239,7 +241,7 @@ class engine(object):
 
 		elif self.params.probing_task == 'feature':
 			if self.params.dataset == 'semeval':
-				dl = feature_preprocess.DataLoader()
+				dl = SemEval_feature_preprocess.DataLoader()
 				dl.read(self.raw_datapath)
 			elif self.params.dataset == 'roc':
 				dl = ROC_preprocess.DataLoader()
@@ -341,6 +343,7 @@ class engine(object):
 
 
 	def prepare_encoder(self):
+		# didn't handle gpt2 here
 		logging.info('preparing encoder...')
 		params = self.params
 
@@ -423,6 +426,12 @@ class engine(object):
 			params.encoder = BertModel.from_pretrained('bert-base-uncased')
 			params.encoder.eval() # ??
 
+		elif model == 'gpt2':
+			logging.getLogger('transformers').setLevel(logging.ERROR)
+			params.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+			params.encoder = GPT2Model.from_pretrained('gpt2')
+			# params.encoder.eval() # ??
+
 		elif model == 'glove':
 			# if 'train' in self.data:
 			# 	samples = self.data['train']['X'] + self.data['dev']['X'] + self.data['test']['X']
@@ -478,7 +487,7 @@ class engine(object):
 
 
 		logging.info(f'encoding data by {model}...')
-		if model == 'bert':
+		if model == 'bert' or model == 'gpt2':
 			hidden_size = self.params.encoder.config.hidden_size
 			embeddings = torch.zeros(self.data.shape[0], hidden_size)
 			pb = utils.ProgressBar(len(self.data.X))
@@ -713,11 +722,11 @@ class engine(object):
 				# print(X_train.shape, X_val.shape, X_test.shape)
 
 				# training
-				regs = [10**t for t in range(-5, -1)] 
+				regs = [10**t for t in range(-5, -1)]
 				scores = []
 				for reg in regs:
 					clf = MLP(self.classifier_config, inputdim=self.featdim,
-						nclasses=self.nclasses, l2reg=reg,
+						nclasses=self.nclasses, l2reg=reg, # reg will be passed to weight_decay in torch.optim.Adam(), lead to to smaller model weights
 						seed=self.params.seed, cudaEfficient=self.cudaEfficient)
 					clf.fit(X_train, y_train, validation_data=(X_val, y_val))
 					scores.append(clf.score(X_val, y_val))

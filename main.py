@@ -103,6 +103,8 @@ def get_args():
         help='the dataset used as ground truth corpus to calc conditional probabilities')
     parser.add_argument('-reset_data', type=int, default=0,
         help='bool')
+    parser.add_argument('-reencode_data', type=int, default=0,
+        help='bool')
     parser.add_argument('-seed', type=int, default=555)
     parser.add_argument('-mask', type=str, default='cause',
         choices=['cause', 'effect'],
@@ -297,6 +299,7 @@ if __name__ == '__main__':
             'probing_task': args.probe,
             'dataset': args.dataset,
             'reset_data': args.reset_data,
+            'reencode_data': args.reencode_data,
             'seed': args.seed,
             'pretrained': {
                 'model': args.model,
