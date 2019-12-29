@@ -130,15 +130,19 @@ class engine(object):
 				'PMI(c, e)',
 				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
 				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
-				'avg_freq_uni', 'avg_freq_bi', 'avg_freq_tri',
-				'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri']
+				'avg_freq_uni', 'avg_freq_bi', 
+				# 'avg_freq_tri',
+				# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
+				]
 			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
 				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
 				'PMI(c, e)',
 				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
 				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
-				'avg_freq_uni', 'avg_freq_bi', 'avg_freq_tri',
-				'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri']
+				'avg_freq_uni', 'avg_freq_bi', 
+				# 'avg_freq_tri',
+				# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
+				]
 			self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
 
 		# elif self.params.probing_task == 'choice':
@@ -346,11 +350,14 @@ class engine(object):
 			# print(self.data['X_shuf_trunc'][7555])
 
 		elif self.params.probing_task == 'feature':
-			self.backup_data = self.data.copy()
+			# self.backup_data = self.data.copy()
 			# self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
 			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
+			# use_cols = [c for c in self.data.columns if c in use_cols] # this excludes -inf ['ovr_freq_tri_cat', 'avg_freq_tri_cat', 'ovr_freq_uni_cat', 'ovr_freq_bi_cat']
 			self.data = self.data[use_cols]
 			self.data.columns = ['X', 'relation'] + self.all_target_columns
+			# self.data.columns = [c[:-4] if '_cat' in c else c for c in self.data.columns]
+			# print(self.data.columns)
 
 
 	def prepare_encoder(self):
