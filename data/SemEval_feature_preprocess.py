@@ -110,7 +110,7 @@ class DataLoader(object):
 			#     break 
 		logging.info(f'features calculated for {self.output.shape[0]} sentences')
 
-	def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True):
+	def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True, trial=False):
 
 		if use_semeval_first: # can avoid c_count = 0 in oanc
 			self.calc_prob()
@@ -147,8 +147,9 @@ class DataLoader(object):
 					self.output.c_e_count += c_in & e_in
 					self.output.e_no_c_count += ~c_in & e_in
 
-				# if f_i > 2:
-				# 	break
+				if trial:
+					if f_i > 2:
+						break
 				# print(f_i, f_path)
 		logging.info(f'iterated through OANC, {self.num_sent} sentences')
 
@@ -168,8 +169,22 @@ class DataLoader(object):
 		self.output['p'] = (-self.output.delta_P / self.output['P(E|no C)'].replace({0 : np.nan})).fillna(0) # handle divide by 0
 		self.output['causal_power'] = self.output.q - self.output.p
 
-		# pd.set_option('display.max_columns', 1000)
-		# print(self.output.head())
+		# cause-effect association
+		# D11-1027, Do et al., 2017
+		self.output['PMI(c, e)'] = np.log(self.output.c_e_count.astype(int) * self.num_sent / (self.output.c_count.astype(int) * self.output.e_count.astype(int)))
+
+		# causal strength
+		# Luo et al., 2016
+		alpha = 0.66
+		self.output['P(C|E)'] = self.output.c_e_count / self.output.e_count
+		self.output['causal_stength_nec'] = (self.output['P(C|E)'] / self.num_sent) / (self.output.c_count / self.num_sent) ** alpha
+		self.output['causal_stength_suf'] = (self.output['P(E|C)'] / self.num_sent) / (self.output.e_count / self.num_sent) ** alpha
+		lambda_cs_list = [0.5, 0.7, 0.9, 1]
+		for lambda_cs in lambda_cs_list:
+			self.output[f'causal_stength_{lambda_cs}'] = self.output.causal_stength_nec ** lambda_cs * self.output.causal_stength_suf ** (1 - lambda_cs)
+
+		pd.set_option('display.max_columns', 1000)
+		print(self.output.head())
 
 	def make_categorical(self, num_classes, num_classes_by, numerical_columns):
 		'''make each numerical variables in each relation categorical'''

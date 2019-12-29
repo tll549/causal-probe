@@ -126,9 +126,15 @@ class engine(object):
 			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
 				# 'probabilistic_causality', 
 				'probabilistic_causality_diff', 
-				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power']
+				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
+				'PMI(c, e)',
+				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
+				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1']
 			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
-				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power']
+				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
+				'PMI(c, e)',
+				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
+				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1']
 			self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
 		# elif self.params.probing_task == 'choice':
 		# 	pass
@@ -251,7 +257,7 @@ class engine(object):
 			if self.params.label_data == 'semeval':
 				dl.calc_prob()
 			elif self.params.label_data == 'oanc':
-				dl.calc_prob_oanc(OANC_DATAPATH)
+				dl.calc_prob_oanc(OANC_DATAPATH, trial=self.params.trial)
 
 			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
 				self.numerical_columns)
