@@ -11,6 +11,8 @@ import codecs
 import nltk
 # nltk.download('punkt')
 from nltk.tokenize import word_tokenize
+from nltk.probability import FreqDist
+from nltk.util import bigrams, trigrams
 
 class DataLoader(object):
 	def __init__(self):
@@ -121,12 +123,12 @@ class DataLoader(object):
 			self.num_sent = 0
 
 		logging.info(f'calculating features using OANC...')
+		fdist_uni, fdist_bi, fdist_tri = FreqDist(), FreqDist(), FreqDist()
 		with ZipFile(oanc_datapath) as zf:
 			txt_written_files = [fn for fn in zf.namelist() if '.txt' in fn and 'written' in fn]
 			logging.info(f'there are {len(txt_written_files)} txt written files')
 			pb = utils.ProgressBar(len(txt_written_files))
 			for f_i, f_path in enumerate(txt_written_files):
-				# print(f_path)
 				pb.now(f_i)
 				all_lines = ''
 				with zf.open(f_path) as f:
@@ -139,7 +141,6 @@ class DataLoader(object):
 				for sent in sentences:
 					tok = [w.lower() for w in word_tokenize(sent)]
 					self.num_sent += 1
-					# print(tok)
 					c_in = self.output.cause.isin(tok)
 					e_in = self.output.effect.isin(tok)
 					self.output.c_count += c_in
@@ -147,10 +148,17 @@ class DataLoader(object):
 					self.output.c_e_count += c_in & e_in
 					self.output.e_no_c_count += ~c_in & e_in
 
+				# unigram, bigram, and trigram for calc avg freq
+				for word in tok:
+					fdist_uni[word] += 1
+				for bi in bigrams(tok):
+					fdist_bi[bi] += 1
+				for tri in trigrams(tok):
+					fdist_tri[bi] += 1
+
 				if trial:
-					if f_i > 2:
+					if f_i > 10:
 						break
-				# print(f_i, f_path)
 		logging.info(f'iterated through OANC, {self.num_sent} sentences')
 
 		# causal dependency
@@ -179,12 +187,28 @@ class DataLoader(object):
 		self.output['P(C|E)'] = self.output.c_e_count / self.output.e_count
 		self.output['causal_stength_nec'] = (self.output['P(C|E)'] / self.num_sent) / (self.output.c_count / self.num_sent) ** alpha
 		self.output['causal_stength_suf'] = (self.output['P(E|C)'] / self.num_sent) / (self.output.e_count / self.num_sent) ** alpha
-		lambda_cs_list = [0.5, 0.7, 0.9, 1]
+		lambda_cs_list = [0.5, 0.7, 0.9, 1.0]
 		for lambda_cs in lambda_cs_list:
 			self.output[f'causal_stength_{lambda_cs}'] = self.output.causal_stength_nec ** lambda_cs * self.output.causal_stength_suf ** (1 - lambda_cs)
 
-		pd.set_option('display.max_columns', 1000)
-		print(self.output.head())
+		# avg frequency, overall frequency
+		def calc_avg_freq(s, fdist):
+			return np.mean([fdist[w] for w in s]) / fdist.N()
+		def calc_ovr_freq(s, fdist):
+			return np.sum(np.log([fdist[w] / fdist.N() for w in s]))
+		X_unigram = self.output.X.apply(lambda x: [w.lower() for w in word_tokenize(x)])
+		X_bigram = X_unigram.apply(lambda x: list(bigrams(x)))
+		X_trigram = X_unigram.apply(lambda x: list(trigrams(x)))
+		self.output['avg_freq_uni'] = X_unigram.apply(calc_avg_freq, args=(fdist_uni, ))
+		self.output['avg_freq_bi'] = X_bigram.apply(calc_avg_freq, args=(fdist_bi, ))
+		self.output['avg_freq_tri'] = X_trigram.apply(calc_avg_freq, args=(fdist_tri, ))
+		self.output['ovr_freq_uni'] = X_unigram.apply(calc_ovr_freq, args=(fdist_uni, ))
+		self.output['ovr_freq_bi'] = X_bigram.apply(calc_ovr_freq, args=(fdist_bi, ))
+		self.output['ovr_freq_tri'] = X_trigram.apply(calc_ovr_freq, args=(fdist_tri, ))
+
+		if trial:
+			pd.set_option('display.max_columns', 1000)
+			print(self.output.head())
 
 	def make_categorical(self, num_classes, num_classes_by, numerical_columns):
 		'''make each numerical variables in each relation categorical'''

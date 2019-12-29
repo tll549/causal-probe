@@ -129,13 +129,18 @@ class engine(object):
 				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
 				'PMI(c, e)',
 				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
-				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1']
+				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
+				'avg_freq_uni', 'avg_freq_bi', 'avg_freq_tri',
+				'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri']
 			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
 				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
 				'PMI(c, e)',
 				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
-				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1']
+				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
+				'avg_freq_uni', 'avg_freq_bi', 'avg_freq_tri',
+				'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri']
 			self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
+
 		# elif self.params.probing_task == 'choice':
 		# 	pass
 
