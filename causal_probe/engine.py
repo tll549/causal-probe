@@ -194,7 +194,7 @@ class engine(object):
 				iter_models = [self.params.pretrained.model]
 
 			for model in iter_models:
-				if self.params.reset_data:
+				if self.params.reencode_data:
 					self.encode(model, self.encoded_datapath + f'_{model}.pkl')
 				self.embeddings = utils.load_newest(self.encoded_datapath + f'_{model}.pkl')
 
@@ -554,9 +554,13 @@ class engine(object):
 			for i in range(len(self.data.X)):
 				pb.now(i)
 
-				x = '[CLS] ' + self.data.X[i] + ' [SEP]'
+				if model == 'bert':
+					x = '[CLS] ' + self.data.X[i] + ' [SEP]'
+				elif model == 'gpt2':
+					tokenizer.add_special_tokens({'cls_token': '[CLS]'})
 
 				tokenized_text = self.params.tokenizer.tokenize(x)
+				print(tokenized_text)
 				indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
 				tokens_tensor = torch.tensor([indexed_tokens])
 
@@ -575,6 +579,7 @@ class engine(object):
 			embeddings = []
 			for sent in self.data.X:
 				sent = sent.split()
+				print(sent)
 				sentvec = []
 				for word in sent:
 					if word in params.word_vec:
@@ -584,6 +589,9 @@ class engine(object):
 					sentvec.append(vec)
 				sentvec = np.mean(sentvec, 0)
 				embeddings.append(sentvec)
+				
+				if self.params.trial:
+					break
 
 			embeddings = np.vstack(embeddings)
 

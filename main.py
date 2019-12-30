@@ -333,6 +333,7 @@ if __name__ == '__main__':
             'probing_task': args.probe,
             'dataset': args.dataset,
             'reset_data': args.reset_data,
+            'reencode_data': args.reencode_data,
             'label_data': args.label_data,
             'seed': args.seed,
             'pretrained': {
