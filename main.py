@@ -44,7 +44,7 @@ def get_args():
     # model settings
     parser.add_argument('-model', type=str, default='bert', 
         # choices=['bert', 'spanbert', 'roberta', 'xlnet', 'gpt2', 'glove'],
-        choices=['bert', 'glove'],
+        choices=['bert', 'glove', 'conceptnet', 'gpt2', 'ALL'],
         help='choose model(bert, spanbert, roberta, gpt2)')
     parser.add_argument('-model_type', type=str, default='base',
                         choices=['base', 'large', 'small', 'medium', 'large'],
@@ -54,9 +54,6 @@ def get_args():
                         help='span average/span difference')
     parser.add_argument('-cased', action='store_true', help='set cased to be true')
     parser.add_argument('-fine_tune', action='store_true', help='fine tune')
-
-    parser.add_argument('-both_bert_glove', type=int, default=1,
-        help='')
 
     # Model configuration
     parser.add_argument('-batch_size', type=int, default=128,
@@ -342,8 +339,6 @@ if __name__ == '__main__':
                 'model': args.model,
                 'model_type': args.model_type,
                 'cased': args.cased,
-
-                'both_bert_glove': args.both_bert_glove
             },
             'cv': args.cv,
             'num_classes': args.num_classes,
@@ -352,24 +347,24 @@ if __name__ == '__main__':
         ce = causal_probe.engine(params)
         result = ce.eval()
 
-    elif args.probe == 'choice':
-        params = {
-            'trial': args.trial,
-            'probing_task': args.probe,
-            'dataset': args.dataset,
-            'reset_data': args.reset_data,
-            'label_data': args.label_data,
-            'seed': args.seed,
-            'pretrained': {
-                'model': args.model,
-                'model_type': args.model_type,
-                'cased': args.cased,
+    # elif args.probe == 'choice':
+    #     params = {
+    #         'trial': args.trial,
+    #         'probing_task': args.probe,
+    #         'dataset': args.dataset,
+    #         'reset_data': args.reset_data,
+    #         'label_data': args.label_data,
+    #         'seed': args.seed,
+    #         'pretrained': {
+    #             'model': args.model,
+    #             'model_type': args.model_type,
+    #             'cased': args.cased,
 
-                'both_bert_glove': args.both_bert_glove
-            },
-            'cv': args.cv,
-            'num_classes': args.num_classes,
-            'num_classes_by': args.num_classes_by
-        }
-        ce = causal_probe.engine(params)
-        result = ce.eval()
+    #             'both_bert_glove': args.both_bert_glove
+    #         },
+    #         'cv': args.cv,
+    #         'num_classes': args.num_classes,
+    #         'num_classes_by': args.num_classes_by
+    #     }
+    #     ce = causal_probe.engine(params)
+    #     result = ce.eval()

@@ -182,7 +182,7 @@ class DataLoader(object):
 		self.N = fdist_uni.N()
 		self.output['PMI'] = np.log(self.output.c_e_count.astype(int) * self.N / (self.output.c_count.astype(int) * self.output.e_count.astype(int))) # don't know why dtype is obj
 
-		# PPMI, NPMI, NNEGPMI
+		# PPMI, CPMI, NPMI, NNEGPMI
 		# Salle & Villavicencio, 2019
 		self.output.loc[self.output.PMI >= 0, 'PPMI'] = self.output.loc[self.output.PMI >= 0, 'PMI']
 		self.output.loc[self.output.PMI < 0, 'PPMI'] = 0
@@ -242,6 +242,8 @@ class DataLoader(object):
 							num_classes, num_classes_by)
 				except ValueError:
 					print(f'{c}, {rel}, this combination will be dropped later, ValueError: Bin edges must be unique')
+				except KeyError:
+					print(f'{c}, {rel} KeyError')
 				# assert self.output[c].nunique() <= num_classes, f'more than {num_classes} classes'
 		# remove incomplete cases caused from above
 		self.output = self.output.dropna()
