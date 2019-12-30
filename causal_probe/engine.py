@@ -127,7 +127,7 @@ class engine(object):
 				# 'probabilistic_causality', 
 				'probabilistic_causality_diff', 
 				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
-				'PMI(c, e)',
+				'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
 				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
 				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
 				'avg_freq_uni', 'avg_freq_bi', 
@@ -136,7 +136,7 @@ class engine(object):
 				]
 			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
 				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
-				'PMI(c, e)',
+				'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
 				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
 				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
 				'avg_freq_uni', 'avg_freq_bi', 
@@ -664,7 +664,7 @@ class engine(object):
 					result_raw = self.train(X, y)
 					for r in result_raw:
 						r.update({'relation': rel, 'y_type': y_name})
-					print(result_raw)
+					# print(result_raw)
 					result += result_raw
 
 				else: # original, should be merge into train()
@@ -715,7 +715,7 @@ class engine(object):
 		y = np.array(y)
 		assert X.shape[0] == len(y), f'X shape {X.shape} and y len {len(y)} not compatible'
 
-		logging.info('start training...')
+		# logging.info('start training...')
 		if self.params.use_pytorch:
 			# TODO default settings, should be add to argparse too
 			# self.classifier_config = config['classifier']
@@ -748,10 +748,10 @@ class engine(object):
 						seed=self.params.seed, cudaEfficient=self.cudaEfficient)
 					clf.fit(X_train, y_train, validation_data=(X_val, y_val))
 					scores.append(clf.score(X_val, y_val))
-				logging.info([('reg:' + str(regs[idx]), scores[idx]) for idx in range(len(scores))])
+				# logging.info([('reg:' + str(regs[idx]), scores[idx]) for idx in range(len(scores))])
 				optreg = regs[np.argmax(scores)]
 				devaccuracy = np.max(scores)
-				logging.info('Validation : best param found is reg = {0} with score {1}'.format(optreg, devaccuracy))
+				# logging.info('Validation : best param found is reg = {0} with score {1}'.format(optreg, devaccuracy))
 
 				# re train
 				clf = MLP(self.classifier_config, inputdim=self.featdim,
@@ -767,7 +767,7 @@ class engine(object):
 					{'metric': 'accuracy', 'split': 'test', 'value': testaccuracy}]
 			
 			# print(result_raw)
-			logging.info('done testing')
+			# logging.info('done testing')
 			return result_raw
 
 		else: # use sklearn

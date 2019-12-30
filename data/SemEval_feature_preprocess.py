@@ -177,16 +177,30 @@ class DataLoader(object):
 		self.output['p'] = (-self.output.delta_P / self.output['P(E|no C)'].replace({0 : np.nan})).fillna(0) # handle divide by 0
 		self.output['causal_power'] = self.output.q - self.output.p
 
-		# cause-effect association
+		# PMI
 		# D11-1027, Do et al., 2017
-		self.output['PMI(c, e)'] = np.log(self.output.c_e_count.astype(int) * self.num_sent / (self.output.c_count.astype(int) * self.output.e_count.astype(int)))
+		self.N = fdist_uni.N()
+		self.output['PMI'] = np.log(self.output.c_e_count.astype(int) * self.N / (self.output.c_count.astype(int) * self.output.e_count.astype(int))) # don't know why dtype is obj
+
+		# PPMI, NPMI, NNEGPMI
+		# Salle & Villavicencio, 2019
+		self.output.loc[self.output.PMI >= 0, 'PPMI'] = self.output.loc[self.output.PMI >= 0, 'PMI']
+		self.output.loc[self.output.PMI < 0, 'PPMI'] = 0
+
+		self.output.loc[self.output.PMI >= -2, 'CPMI_-2'] = self.output.loc[self.output.PMI >= -2, 'PMI']
+		self.output.loc[self.output.PMI < -2, 'CPMI_-2'] = -2
+
+		self.output['NPMI'] = self.output['PMI'] / -np.log(self.output.c_e_count.astype(int) / self.N)
+
+		self.output.loc[self.output['PMI'] >= 0, 'NNEGPMI'] = self.output.loc[self.output['PMI'] >= 0, 'PMI']
+		self.output.loc[self.output['PMI'] < 0, 'NNEGPMI'] = self.output.loc[self.output['PMI'] < 0, 'NPMI']
 
 		# causal strength
 		# Luo et al., 2016
 		alpha = 0.66
 		self.output['P(C|E)'] = self.output.c_e_count / self.output.e_count
-		self.output['causal_stength_nec'] = (self.output['P(C|E)'] / self.num_sent) / (self.output.c_count / self.num_sent) ** alpha
-		self.output['causal_stength_suf'] = (self.output['P(E|C)'] / self.num_sent) / (self.output.e_count / self.num_sent) ** alpha
+		self.output['causal_stength_nec'] = (self.output['P(C|E)'] / self.N) / (self.output.c_count / self.N) ** alpha
+		self.output['causal_stength_suf'] = (self.output['P(E|C)'] / self.N) / (self.output.e_count / self.N) ** alpha
 		lambda_cs_list = [0.5, 0.7, 0.9, 1.0]
 		for lambda_cs in lambda_cs_list:
 			self.output[f'causal_stength_{lambda_cs}'] = self.output.causal_stength_nec ** lambda_cs * self.output.causal_stength_suf ** (1 - lambda_cs)
