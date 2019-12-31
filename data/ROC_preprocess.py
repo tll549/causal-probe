@@ -12,6 +12,9 @@ import pandas as pd
 from causal_probe import utils
 import numpy as np
 
+from nltk.probability import FreqDist
+from nltk.util import bigrams, trigrams
+
 class DataLoader(object):
     def __init__(self):
         self.txt, self.ann = [], []
@@ -155,7 +158,7 @@ class DataLoader(object):
         logging.info(f'features calculated for {self.output.shape[0]} sentences')
 
 
-    def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True):
+    def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True, trial=False):
 
         if use_semeval_first: # can avoid c_count = 0 in oanc
             self.calc_prob()
@@ -166,6 +169,7 @@ class DataLoader(object):
             self.num_sent = 0
 
         logging.info(f'calculating features using OANC...')
+        fdist_uni, fdist_bi, fdist_tri = FreqDist(), FreqDist(), FreqDist()
         with ZipFile(oanc_datapath) as zf:
             txt_written_files = [fn for fn in zf.namelist() if '.txt' in fn and 'written' in fn]
             logging.info(f'there are {len(txt_written_files)} txt written files')
@@ -192,16 +196,23 @@ class DataLoader(object):
                     self.output.c_e_count += c_in & e_in
                     self.output.e_no_c_count += ~c_in & e_in
 
-                # if f_i > 10:
-                #     break
-                # print(f_i, f_path)
+                # unigram, bigram, and trigram for calc avg freq
+                for word in tok:
+                    fdist_uni[word] += 1
+                for bi in bigrams(tok):
+                    fdist_bi[bi] += 1
+                for tri in trigrams(tok):
+                    fdist_tri[bi] += 1
+
+                if trial:
+                    if f_i > 10:
+                        break
         logging.info(f'iterated through OANC, {self.num_sent} sentences')
-        # print(self.output)
 
         # causal dependency
         self.output['causal_dependency'] = (self.output.c_count == self.output.c_e_count) & (self.output.e_no_c_count == 0)
         # probabilistic causality
-        self.output['P(E|C)'] = self.output.c_e_count / self.output.c_count.replace({0 : np.nan})
+        self.output['P(E|C)'] = self.output.c_e_count / self.output.c_count
         self.output['P(E)'] = self.output.e_count / self.num_sent
         self.output['probabilistic_causality'] = self.output['P(E|C)'] >= self.output['P(E)']
         self.output['probabilistic_causality_diff'] = self.output['P(E|C)'] - self.output['P(E)']
@@ -214,8 +225,52 @@ class DataLoader(object):
         self.output['p'] = (-self.output.delta_P / self.output['P(E|no C)'].replace({0 : np.nan})).fillna(0) # handle divide by 0
         self.output['causal_power'] = self.output.q - self.output.p
 
-        # pd.set_option('display.max_columns', 1000)
-        # print(self.output.head())
+        # PMI
+        # D11-1027, Do et al., 2017
+        self.N = fdist_uni.N()
+        self.output['PMI'] = np.log(self.output.c_e_count.astype(int) * self.N / (self.output.c_count.astype(int) * self.output.e_count.astype(int))) # don't know why dtype is obj
+
+        # PPMI, CPMI, NPMI, NNEGPMI
+        # Salle & Villavicencio, 2019
+        self.output.loc[self.output.PMI >= 0, 'PPMI'] = self.output.loc[self.output.PMI >= 0, 'PMI']
+        self.output.loc[self.output.PMI < 0, 'PPMI'] = 0
+
+        self.output.loc[self.output.PMI >= -2, 'CPMI_-2'] = self.output.loc[self.output.PMI >= -2, 'PMI']
+        self.output.loc[self.output.PMI < -2, 'CPMI_-2'] = -2
+
+        self.output['NPMI'] = self.output['PMI'] / -np.log(self.output.c_e_count.astype(int) / self.N)
+
+        self.output.loc[self.output['PMI'] >= 0, 'NNEGPMI'] = self.output.loc[self.output['PMI'] >= 0, 'PMI']
+        self.output.loc[self.output['PMI'] < 0, 'NNEGPMI'] = self.output.loc[self.output['PMI'] < 0, 'NPMI']
+
+        # causal strength
+        # Luo et al., 2016
+        alpha = 0.66
+        self.output['P(C|E)'] = self.output.c_e_count / self.output.e_count
+        self.output['causal_stength_nec'] = (self.output['P(C|E)'] / self.N) / (self.output.c_count / self.N) ** alpha
+        self.output['causal_stength_suf'] = (self.output['P(E|C)'] / self.N) / (self.output.e_count / self.N) ** alpha
+        lambda_cs_list = [0.5, 0.7, 0.9, 1.0]
+        for lambda_cs in lambda_cs_list:
+            self.output[f'causal_stength_{lambda_cs}'] = self.output.causal_stength_nec ** lambda_cs * self.output.causal_stength_suf ** (1 - lambda_cs)
+
+        # avg frequency, overall frequency
+        def calc_avg_freq(s, fdist):
+            return np.mean([fdist[w] for w in s]) / fdist.N()
+        def calc_ovr_freq(s, fdist):
+            return np.sum(np.log([fdist[w] / fdist.N() for w in s]))
+        X_unigram = self.output.X.apply(lambda x: [w.lower() for w in word_tokenize(x)])
+        X_bigram = X_unigram.apply(lambda x: list(bigrams(x)))
+        X_trigram = X_unigram.apply(lambda x: list(trigrams(x)))
+        self.output['avg_freq_uni'] = X_unigram.apply(calc_avg_freq, args=(fdist_uni, ))
+        self.output['avg_freq_bi'] = X_bigram.apply(calc_avg_freq, args=(fdist_bi, ))
+        self.output['avg_freq_tri'] = X_trigram.apply(calc_avg_freq, args=(fdist_tri, ))
+        self.output['ovr_freq_uni'] = X_unigram.apply(calc_ovr_freq, args=(fdist_uni, ))
+        self.output['ovr_freq_bi'] = X_bigram.apply(calc_ovr_freq, args=(fdist_bi, ))
+        self.output['ovr_freq_tri'] = X_trigram.apply(calc_ovr_freq, args=(fdist_tri, ))
+
+        if trial:
+            pd.set_option('display.max_columns', 1000)
+            print(self.output.head())
 
     def make_categorical(self, num_classes, num_classes_by, numerical_columns):
         '''make each numerical variables in each relation categorical'''
