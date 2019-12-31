@@ -11,6 +11,8 @@ from data import SemEval_feature_preprocess
 from data import ROC_preprocess
 from data import BECAUSE_preprocess
 
+from nltk.tokenize import word_tokenize
+
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
@@ -472,14 +474,13 @@ class engine(object):
 			# 	params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
 			# else:
 			# 	params.encoder = BertModel.from_pretrained('bert-base-uncased')
-			params.encoder = BertModel.from_pretrained('bert-base-uncased')
+			params.encoder = BertModel.from_pretrained(bert_type)
 			params.encoder.eval() # ??
 
 		elif model == 'gpt2':
 			logging.getLogger('transformers').setLevel(logging.ERROR)
 			params.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 			params.encoder = GPT2Model.from_pretrained('gpt2')
-			# params.encoder.eval() # ??
 
 		elif model == 'glove':
 			samples = self.data['X']
@@ -557,10 +558,16 @@ class engine(object):
 				if model == 'bert':
 					x = '[CLS] ' + self.data.X[i] + ' [SEP]'
 				elif model == 'gpt2':
-					tokenizer.add_special_tokens({'cls_token': '[CLS]'})
+					x = self.data.X[i]
 
 				tokenized_text = self.params.tokenizer.tokenize(x)
-				print(tokenized_text)
+				# double check tokenize correctly, previous version of transformers has some problems
+				if self.data.X[i] == 'The system as described above has its greatest application in an arrayed configuration of antenna elements.':
+					if model == 'bert':
+						assert tokenized_text == ['[CLS]', 'the', 'system', 'as', 'described', 'above', 'has', 'its', 'greatest', 'application', 'in', 'an', 'array', '##ed', 'configuration', 'of', 'antenna', 'elements', '.', '[SEP]']
+					elif model == 'gpt2':
+						assert tokenized_text == ['The', 'Ġsystem', 'Ġas', 'Ġdescribed', 'Ġabove', 'Ġhas', 'Ġits', 'Ġgreatest', 'Ġapplication', 'Ġin', 'Ġan', 'Ġarray', 'ed', 'Ġconfiguration', 'Ġof', 'Ġantenna', 'Ġelements', '.']
+
 				indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
 				tokens_tensor = torch.tensor([indexed_tokens])
 
@@ -578,8 +585,10 @@ class engine(object):
 		elif model == 'glove' or model == 'conceptnet':
 			embeddings = []
 			for sent in self.data.X:
-				sent = sent.split()
-				print(sent)
+				# tokenize
+				sent = [w.lower() for w in word_tokenize(sent)]
+				# print(sent) # ['the', 'system', 'as', 'described', 'above', 'has', 'its', 'greatest', 'application', 'in', 'an', 'arrayed', 'configuration', 'of', 'antenna', 'elements', '.']
+
 				sentvec = []
 				for word in sent:
 					if word in params.word_vec:
@@ -589,7 +598,7 @@ class engine(object):
 					sentvec.append(vec)
 				sentvec = np.mean(sentvec, 0)
 				embeddings.append(sentvec)
-				
+
 				if self.params.trial:
 					break
 
