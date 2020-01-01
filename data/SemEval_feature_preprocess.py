@@ -161,6 +161,13 @@ class DataLoader(object):
 						break
 		logging.info(f'iterated through OANC, {self.num_sent} sentences')
 
+		# print(self.output.c_count.dtype, self.output.e_count.dtype, 
+		# 	  self.output.c_e_count.dype, self.output.e_no_c_count.dtype)
+		# self.output.c_count = self.output.c_count.astype(int)
+		# self.output.e_count = self.output.e_count.astype(int)
+		# self.output.c_e_count = self.output.c_e_count.astype(int)
+		# self.output.e_no_c_count = self.output.e_no_c_count.astype(int)
+
 		# causal dependency
 		self.output['causal_dependency'] = (self.output.c_count == self.output.c_e_count) & (self.output.e_no_c_count == 0)
 		# probabilistic causality

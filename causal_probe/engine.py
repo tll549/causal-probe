@@ -41,11 +41,6 @@ OANC_DATA = 'OANC_GrAF.zip' # 'data/causal_probing/OANC_GrAF.zip'
 
 LOGS_PATH = 'logs/'
 
-
-# SemEval_RAW_DATAPATH = 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT' # os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA)
-# SemEval_mask_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_mask'
-# SemEval_LOGS_DATAPATH = 'logs/'
-
 SemEval_feature_PROCESSED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_processed.csv'
 SemEval_feature_ENCODED_DATAPATH = 'data/causal_probing/SemEval_2010_8/processed/SemEval_feature_embeddings.pkl'
 
@@ -209,47 +204,6 @@ class engine(object):
 				except:
 					self.result_models = self.result
 
-
-			# if self.params.pretrained.model == 'bert' or self.params.pretrained.model == 'ALL': # or both
-			# 	if self.params.reset_data:
-			# 		self.encode('bert', self.encoded_datapath + '_bert.pkl')
-			# 	self.embeddings = utils.load_newest(self.encoded_datapath + '_bert.pkl')
-
-			# 	logging.info('start predicting by bert...')
-			# 	self.predict_feature(cv=self.params.cv)
-
-			# 	self.result['model'] = 'bert'
-			# 	self.result_models = self.result.copy()
-
-			# if self.params.pretrained.model == 'glove' or self.params.pretrained.model == 'ALL':
-			# 	if self.params.reset_data:
-			# 		self.encode('glove', self.encoded_datapath + '_glove.pkl')
-			# 	self.embeddings = utils.load_newest(self.encoded_datapath + '_glove.pkl')
-
-			# 	logging.info('start predicting by glove...')
-			# 	self.predict_feature(cv=self.params.cv)
-
-			# 	self.result['model'] = 'glove'
-			# 	try:
-			# 		self.result_models = self.result_models.append(self.result, ignore_index=True)
-			# 	except:
-			# 		self.result_models = self.result
-
-			# if self.params.pretrained.model == 'conceptnet' or self.params.pretrained.model == 'ALL':
-			# 	if self.params.reset_data:
-			# 		self.encode('conceptnet', self.encoded_datapath + '_conceptnet.pkl')
-			# 	self.embeddings = utils.load_newest(self.encoded_datapath + '_conceptnet.pkl')
-
-			# 	logging.info('start predicting by conceptnet...')
-			# 	self.predict_feature(cv=self.params.cv)
-
-			# 	self.result['model'] = 'conceptnet'
-			# 	try:
-			# 		self.result_models = self.result_models.append(self.result, ignore_index=True)
-			# 	except:
-			# 		self.result_models = self.result
-
-
 			utils.save_dt(self.result_models, self.result_datapath)
 
 			if self.params.use_pytorch:
@@ -386,80 +340,12 @@ class engine(object):
 			# self.backup_data = self.data.copy()
 			# self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
 			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
-			# use_cols = [c for c in self.data.columns if c in use_cols] # this excludes -inf ['ovr_freq_tri_cat', 'avg_freq_tri_cat', 'ovr_freq_uni_cat', 'ovr_freq_bi_cat']
+			use_cols = [c for c in self.data.columns if c in use_cols] # this excludes -inf ['ovr_freq_tri_cat', 'avg_freq_tri_cat', 'ovr_freq_uni_cat', 'ovr_freq_bi_cat']
 			self.data = self.data[use_cols]
-			self.data.columns = ['X', 'relation'] + self.all_target_columns
-			# self.data.columns = [c[:-4] if '_cat' in c else c for c in self.data.columns]
+			# self.data.columns = ['X', 'relation'] + self.all_target_columns
+			self.data.columns = [c[:-4] if '_cat' in c else c for c in self.data.columns]
+			# self.all_target_columns = self.data.columns[:3]
 			# print(self.data.columns)
-
-
-	# def prepare_encoder(self):
-	# 	# didn't handle gpt2 here
-	# 	logging.info('preparing encoder...')
-	# 	params = self.params
-
-	# 	if params.pretrained.model == 'bert' or params.pretrained.model == 'ALL':
-	# 		bert_type = f'bert-{params.pretrained.model_type}-{"cased" if params.pretrained.cased else "uncased"}'
-	# 		logging.getLogger('transformers').setLevel(logging.ERROR)
-	# 		params.tokenizer = BertTokenizer.from_pretrained(bert_type)
-	# 		if self.params.probing_task == 'mask':
-	# 			params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
-	# 		else:
-	# 			params.encoder = BertModel.from_pretrained('bert-base-uncased')
-	# 		params.encoder.eval() # ??
-
-	# 	if params.pretrained.model == 'glove' or params.pretrained.model == 'ALL':
-	# 		# from senteval
-	# 		if 'train' in self.data:
-	# 			samples = self.data['train']['X'] + self.data['dev']['X'] + self.data['test']['X']
-	# 		else:
-	# 			samples = self.data['X']
-	# 		samples = [s.split() for s in samples]
-	# 		# Create dictionary
-	# 		def create_dictionary(sentences, threshold=0):
-	# 			words = {}
-	# 			for s in sentences:
-	# 				for word in s:
-	# 					words[word] = words.get(word, 0) + 1
-
-	# 			if threshold > 0:
-	# 				newwords = {}
-	# 				for word in words:
-	# 					if words[word] >= threshold:
-	# 						newwords[word] = words[word]
-	# 				words = newwords
-	# 			words['<s>'] = 1e9 + 4
-	# 			words['</s>'] = 1e9 + 3
-	# 			words['<p>'] = 1e9 + 2
-
-	# 			sorted_words = sorted(words.items(), key=lambda x: -x[1])  # inverse sort
-	# 			id2word = []
-	# 			word2id = {}
-	# 			for i, (w, _) in enumerate(sorted_words):
-	# 				id2word.append(w)
-	# 				word2id[w] = i
-
-	# 			return id2word, word2id
-	# 		_, params.word2id = create_dictionary(samples)
-	# 		# Get word vectors from vocabulary (glove, word2vec, fasttext ..)
-	# 		def get_wordvec(path_to_vec, word2id):
-	# 			word_vec = {}
-
-	# 			with io.open(path_to_vec, 'r', encoding='utf-8') as f:
-	# 				# if word2vec or fasttext file : skip first line "next(f)"
-	# 				for line in f:
-	# 					word, vec = line.split(' ', 1)
-	# 					if word in word2id:
-	# 						word_vec[word] = np.fromstring(vec, sep=' ')
-
-	# 			logging.info('Found {0} words with word vectors, out of {1} words'.format(len(word_vec), len(word2id)))
-	# 			return word_vec
-	# 		params.word_vec = get_wordvec(GLOVE_PATH, params.word2id)
-	# 		params.wvec_dim = 300
-	# 		logging.debug(f'word2id: {params.word2id["man"]}') # 90
-	# 		logging.debug(f'word2vec: {params.word_vec["man"][:5]}') # 300
-
-	# 	logging.info('prepared')
 
 	def encode(self, model, save_path):
 		'''prepare different encoders and save to save_path'''
@@ -895,8 +781,6 @@ class engine(object):
 					label.set_rotation(45)
 					label.set_ha('right')
 			filename = LOGS_PATH + f'fig_{self.params.probing_task}_{self.params.dataset}_{metric}{"_causal" if only_causal else ""}_{self.params.seed}.png'
-			# plt.savefig(filename, dpi=600, bbox_inches='tight')
-			# plt.show()
 			utils.save_dt(plt, filename, dpi=600, bbox_inches='tight')
 		plot_metric(d, 'f1', False)
 		plot_metric(d, 'balanced_accuracy', False)
