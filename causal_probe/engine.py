@@ -105,13 +105,6 @@ class engine(object):
 			elif self.params.dataset == 'roc':
 				dataset_path = ROC_PATH
 
-			# if self.params.dataset == 'semeval':
-			# 	self.processed_datapath = SemEval_feature_PROCESSED_DATAPATH
-			# 	self.encoded_datapath = SemEval_feature_ENCODED_DATAPATH
-			# elif self.params.dataset == 'roc':
-			# 	self.processed_datapath = ROC_feature_PROCESSED_DATAPATH
-			# 	self.encoded_datapath = ROC_feature_ENCODED_DATAPATH
-
 			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
 				f'{self.params.probing_task}.csv')  # should also use config_filename?
 			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
@@ -121,27 +114,27 @@ class engine(object):
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
 			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}')
 
-			self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
-				# 'probabilistic_causality', 
-				'probabilistic_causality_diff', 
-				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
-				'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
-				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
-				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
-				'avg_freq_uni', 'avg_freq_bi', 
-				# 'avg_freq_tri',
-				# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
-				]
-			self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
-				'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
-				'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
-				'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
-				'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
-				'avg_freq_uni', 'avg_freq_bi', 
-				# 'avg_freq_tri',
-				# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
-				]
-			self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
+			# self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
+			# 	# 'probabilistic_causality', 
+			# 	'probabilistic_causality_diff', 
+			# 	'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
+			# 	'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
+			# 	'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
+			# 	'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
+			# 	'avg_freq_uni', 'avg_freq_bi', 
+			# 	# 'avg_freq_tri',
+			# 	# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
+			# 	]
+			# self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
+			# 	'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
+			# 	'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
+			# 	'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
+			# 	'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
+			# 	'avg_freq_uni', 'avg_freq_bi', 
+			# 	# 'avg_freq_tri',
+			# 	# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
+			# 	]
+			# self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
 
 		# elif self.params.probing_task == 'choice':
 		# 	pass
@@ -256,7 +249,7 @@ class engine(object):
 				dl.calc_prob_oanc(OANC_DATAPATH, trial=self.params.trial)
 
 			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
-				self.numerical_columns)
+				self.all_target_columns)
 			dl.save_output(self.processed_datapath)
 
 	def load_data(self):
@@ -337,15 +330,21 @@ class engine(object):
 			# print(self.data['X_shuf_trunc'][7555])
 
 		elif self.params.probing_task == 'feature':
-			# self.backup_data = self.data.copy()
-			# self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
-			use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
-			use_cols = [c for c in self.data.columns if c in use_cols] # this excludes -inf ['ovr_freq_tri_cat', 'avg_freq_tri_cat', 'ovr_freq_uni_cat', 'ovr_freq_bi_cat']
+			# # self.backup_data = self.data.copy()
+			# # self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
+			# use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
+			# use_cols = [c for c in self.data.columns if c in use_cols] # this excludes -inf ['ovr_freq_tri_cat', 'avg_freq_tri_cat', 'ovr_freq_uni_cat', 'ovr_freq_bi_cat']
+			# self.data = self.data[use_cols]
+			# # self.data.columns = ['X', 'relation'] + self.all_target_columns
+			# self.data.columns = [c[:-4] if '_cat' in c else c for c in self.data.columns]
+			# # self.all_target_columns = self.data.columns[:3]
+			# # print(self.data.columns)
+
+			use_cols = ['X', 'relation'] + [c for c in self.data.columns if '_cat' in c]
 			self.data = self.data[use_cols]
-			# self.data.columns = ['X', 'relation'] + self.all_target_columns
-			self.data.columns = [c[:-4] if '_cat' in c else c for c in self.data.columns]
-			# self.all_target_columns = self.data.columns[:3]
-			# print(self.data.columns)
+			
+			self.all_target_columns = [c[:-4] for c in self.data.columns if '_cat' in c]
+			self.data.columns = [c if '_cat' not in c else c[:-4] for c in self.data.columns]
 
 	def encode(self, model, save_path):
 		'''prepare different encoders and save to save_path'''
