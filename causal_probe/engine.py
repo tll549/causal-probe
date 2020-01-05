@@ -144,7 +144,6 @@ class engine(object):
 				self.result += result_raw
 				result_pred['model'] = [model] * len(result_pred['true'])
 				self.result_pred = self.result_pred.append(pd.DataFrame(result_pred), ignore_index=True)
-				# print(self.result_pred.tail())
 			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'split', 'value'])
 			utils.save_dt(self.result, self.result_datapath)
 			utils.save_dt(self.result_pred, self.result_pred_datapath)
@@ -228,8 +227,7 @@ class engine(object):
 			elif self.params.label_data == 'oanc':
 				dl.calc_prob_oanc(OANC_DATAPATH, trial=self.params.trial)
 
-			dl.make_categorical(self.params.num_classes, self.params.num_classes_by,
-				self.all_target_columns)
+			dl.make_categorical(self.params.num_classes, self.params.num_classes_by)
 			dl.save_output(self.processed_datapath)
 
 	def load_data(self):
@@ -548,7 +546,7 @@ class engine(object):
 		from sklearn.model_selection import cross_validate
 		from sklearn.linear_model import LogisticRegression
 
-		from sklearn.utils.testing import ignore_warnings
+		# from sklearn.utils.testing import ignore_warnings
 		from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
 		import warnings
 		warnings.filterwarnings("ignore", category=FutureWarning)
@@ -580,6 +578,12 @@ class engine(object):
 					result += result_raw
 
 				else: # original, should be merge into train()
+					# check nan
+					if y.isnull().sum() > 0:
+						logging.info(f'    removing {y.isnull().sum()} nulls in y')
+						X = X[y.notnull()]
+						y = y[y.notnull()]
+
 					y = np.array(y)
 
 					clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
@@ -613,6 +617,12 @@ class engine(object):
 
 		from sklearn.model_selection import train_test_split
 		from sklearn.model_selection import StratifiedKFold
+
+		# check nan
+		if y.isnull().sum() > 0:
+			logging.info(f'    removing {y.isnull().sum()} nulls in y')
+			embeddings = embeddings[y.notnull()]
+			y = y[y.notnull()]
 
 		X = embeddings
 		y = np.array(y)

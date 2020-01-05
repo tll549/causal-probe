@@ -113,6 +113,7 @@ class DataLoader(object):
 		logging.info(f'features calculated for {self.output.shape[0]} sentences')
 
 	def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True, trial=False):
+		logging.getLogger('numexpr').setLevel(logging.ERROR)
 
 		if use_semeval_first: # can avoid c_count = 0 in oanc
 			self.calc_prob()
@@ -231,7 +232,7 @@ class DataLoader(object):
 			pd.set_option('display.max_columns', 1000)
 			print(self.output.head())
 
-	def make_categorical(self, num_classes, num_classes_by, numerical_columns):
+	def make_categorical(self, num_classes, num_classes_by):
 		'''make each numerical variables in each relation categorical'''
 		def float_categorize(s, num_classes, by):
 			'''s should be numerical pd.series'''
@@ -241,6 +242,7 @@ class DataLoader(object):
 				return s
 			elif by == 'quantile':
 				return pd.qcut(s, num_classes, labels=False)
+		numerical_columns = [c for c in self.output.columns[8:] if self.output[c].nunique() > num_classes]
 		for c in numerical_columns:
 			for rel in self.output.relation.unique():
 				try:
@@ -253,7 +255,7 @@ class DataLoader(object):
 					print(f'{c}, {rel} KeyError')
 				# assert self.output[c].nunique() <= num_classes, f'more than {num_classes} classes'
 		# remove incomplete cases caused from above
-		self.output = self.output.dropna()
+		# self.output = self.output.dropna()
 
 	def save_output(self, data_path):
 		utils.save_dt(self.output, data_path, index=False)

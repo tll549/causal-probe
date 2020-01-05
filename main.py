@@ -95,7 +95,7 @@ def get_args():
     parser.add_argument('-dataset', type=str, default='semeval',
         choices=['semeval', 'because', 'roc'],
         help='')
-    parser.add_argument('-label_data', type=str, default='semeval',
+    parser.add_argument('-label_data', type=str, default='oanc',
         choices=['semeval', 'oanc'],
         help='the dataset used as ground truth corpus to calc conditional probabilities')
     parser.add_argument('-reset_data', type=int, default=0,
