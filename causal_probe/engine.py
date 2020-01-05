@@ -154,7 +154,7 @@ class engine(object):
 
 		if self.params.probing_task == 'simple':
 			self.result = []
-			for model in ['bert', 'glove', 'gpt2']:
+			for model in ['bert', 'glove', 'gpt2', 'conceptnet']:
 				encoded_model_path = self.encoded_datapath + f'_{model}.pkl'
 				if self.params.reencode_data:
 					self.encode(model, encoded_model_path)
@@ -167,7 +167,6 @@ class engine(object):
 				self.result += result_raw
 			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'split', 'value'])
 			utils.save_dt(self.result, self.result_datapath)
-			# print(self.result)
 
 			self.plot_metrics(self.fig_datapath)
 
@@ -342,7 +341,7 @@ class engine(object):
 
 			use_cols = ['X', 'relation'] + [c for c in self.data.columns if '_cat' in c]
 			self.data = self.data[use_cols]
-			
+
 			self.all_target_columns = [c[:-4] for c in self.data.columns if '_cat' in c]
 			self.data.columns = [c if '_cat' not in c else c[:-4] for c in self.data.columns]
 
@@ -493,21 +492,6 @@ class engine(object):
 		logging.info(f'data encoded by {model}, embeddings shape: {embeddings.shape}')
 		# return embeddings
 
-	# # obsolete ↓↓
-	# def encode_data_bert(self, save_path):
-	# 	self.embeddings = self.encode('bert', save_path)
-	# 	return
-
-	# def encode_data_glove(self, save_path):
-	# 	self.embeddings = self.encode('glove', save_path)
-	# 	return
-
-	# def load_encoded_data(self, save_path):
-	# 	self.embeddings = utils.load_newest(save_path)
-	# 	logging.info(f'loaded, embeddings shape {self.embeddings.shape}')
-	# # obsolete ↑↑
-
-
 	def predict_mask(self):
 		logging.info('predicting...')
 		k_list = [1, 3, 5, 7, 9, 10, 20]
@@ -592,8 +576,8 @@ class engine(object):
 
 		result = []
 		for rel in self.data.relation.unique():
-			# if rel != 'Cause-Effect': # TEMP setting
-			# 	continue
+			if rel != 'Cause-Effect': # TEMP only predict cause-effect so tons faster
+				continue
 			for y_name in self.all_target_columns:
 				X = self.embeddings[np.array(self.data.relation == rel), :]
 				y = self.data.loc[self.data.relation == rel, y_name]
@@ -802,6 +786,7 @@ class engine(object):
 					ax.text(_x, _y, value, ha="center") 
 		self.result = utils.load_newest(result_path)
 		self.result = self.result[self.result.y_type != 'causal_dependency']  # TEMP setting # remove causal_dependency because imbalanced
+		self.result = self.result[self.result.split == 'test'] # TEMP plot only for test set
 		for rel in self.result.relation.unique():
 			g = sns.catplot(y='value', x='y_type', hue='model', 
 				data=self.result[self.result.relation == rel], 
