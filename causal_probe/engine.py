@@ -81,6 +81,7 @@ class engine(object):
 			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
 				f'{self.params.probing_task}') # should also use config_filename?
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
+			self.result_pred_datapath = os.path.join(LOGS_PATH, f'result_pred_{config_filename}.csv')
 			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}.png')
 
 		if self.params.probing_task == 'mask':
@@ -114,31 +115,6 @@ class engine(object):
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
 			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}')
 
-			# self.all_target_columns = ['causal_dependency', 'P(E|C)', 'P(E)', 
-			# 	# 'probabilistic_causality', 
-			# 	'probabilistic_causality_diff', 
-			# 	'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
-			# 	'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
-			# 	'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
-			# 	'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
-			# 	'avg_freq_uni', 'avg_freq_bi', 
-			# 	# 'avg_freq_tri',
-			# 	# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
-			# 	]
-			# self.numerical_columns = ['P(E|C)', 'P(E)', 'probabilistic_causality_diff',
-			# 	'delta_P', 'P(E|no C)', 'q', 'p', 'causal_power', 
-			# 	'PMI', 'PPMI', 'CPMI_-2', 'NPMI', 'NNEGPMI',
-			# 	'P(C|E)', 'causal_stength_nec', 'causal_stength_suf', 
-			# 	'causal_stength_0.5', 'causal_stength_0.7', 'causal_stength_0.9', 'causal_stength_1.0',
-			# 	'avg_freq_uni', 'avg_freq_bi', 
-			# 	# 'avg_freq_tri',
-			# 	# 'ovr_freq_uni', 'ovr_freq_bi', 'ovr_freq_tri'
-			# 	]
-			# self.binary_columns = [x for x in self.all_target_columns if x not in self.numerical_columns]
-
-		# elif self.params.probing_task == 'choice':
-		# 	pass
-
 		self.last_filename = '{}_{}_{}_{}_{}'.format(
 			'_TRIAL' if self.params.trial else '',
 			self.params.dataset, self.params.probing_task, 
@@ -154,6 +130,7 @@ class engine(object):
 
 		if self.params.probing_task == 'simple':
 			self.result = []
+			self.result_pred = pd.DataFrame(columns=['X_idx', 'pred', 'true', 'model'])
 			for model in ['bert', 'glove', 'gpt2', 'conceptnet']:
 				encoded_model_path = self.encoded_datapath + f'_{model}.pkl'
 				if self.params.reencode_data:
@@ -161,12 +138,16 @@ class engine(object):
 				embeddings = utils.load_newest(encoded_model_path)
 				logging.info(f'all encoded data loaded')
 
-				result_raw = self.train(embeddings, self.data.causal)
+				result_raw, result_pred = self.train(embeddings, self.data.causal, return_pred=True)
 				for r in result_raw:
 					r['model'] = model
 				self.result += result_raw
+				result_pred['model'] = [model] * len(result_pred['true'])
+				self.result_pred = self.result_pred.append(pd.DataFrame(result_pred), ignore_index=True)
+				# print(self.result_pred.tail())
 			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'split', 'value'])
 			utils.save_dt(self.result, self.result_datapath)
+			utils.save_dt(self.result_pred, self.result_pred_datapath)
 
 			self.plot_metrics(self.fig_datapath)
 
@@ -610,7 +591,6 @@ class engine(object):
 						scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted', 
 							# 'roc_auc_ovr', 'roc_auc_ovo', 'roc_auc_ovr_weighted', 'roc_auc_ovo_weighted'
 							)
-					# print(type(X), type(y))
 					cv_results = cross_validate(clf, X, y, cv=cv, error_score='raise',
 						scoring=scoring) # error_score=np.nan
 					clf.fit(X, y)
@@ -627,7 +607,7 @@ class engine(object):
 		
 		# utils.save_dt(result, index=False)
 
-	def train(self, embeddings, y):
+	def train(self, embeddings, y, return_pred=False):
 		from sklearn.model_selection import cross_validate
 		from sklearn.linear_model import LogisticRegression
 
@@ -648,12 +628,9 @@ class engine(object):
 			# reg = 1e-9 # no reg, or for reg in [10**t for t in range(-5, -1)]
 			self.cudaEfficient = False # if 'cudaEfficient' not in config else config['cudaEfficient']
 
-			# train dev test split once
-			# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=self.params.seed)
-			# X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=self.params.seed)
-
 			# train dev test split k-fold
 			result_raw = []
+			result_pred = {'X_idx': [], 'pred': [], 'true': []}
 			skf = StratifiedKFold(n_splits=self.params.cv, shuffle=True, random_state=self.params.seed)
 			skf.get_n_splits(X, y)
 			for train_index, test_index in skf.split(X, y):
@@ -683,7 +660,13 @@ class engine(object):
 				clf.fit(X_train, y_train, validation_data=(X_val, y_val))
 
 				# test
-				testaccuracy = clf.score(X_test, y_test)
+				testaccuracy, pred = clf.score(X_test, y_test, return_pred=True)
+
+				# record all prediction for analysis
+				result_pred['X_idx'] += test_index.tolist()
+				result_pred['pred'] += pred
+				result_pred['true'] += y_test.tolist()
+				assert len(result_pred['pred']) == len(result_pred['true']), 'pred and true y have diff len, pred: {}, true: {}'.format(len(result_pred['pred']), len(result_pred['true']))
 
 				result_raw += [
 					{'metric': 'accuracy', 'split': 'dev', 'value': devaccuracy},
@@ -691,14 +674,17 @@ class engine(object):
 			
 			# print(result_raw)
 			# logging.info('done testing')
-			return result_raw
+			if not return_pred:
+				return result_raw
+			else:
+				return result_raw, result_pred
 
 		else: # use sklearn
 			# SentEval use
 			# LogisticRegression(C=reg, random_state=self.seed) 
-			# reg = [2**t for t in range(-2, 4, 1)]
+			# reg = [2**t for t in range(-2, 4, 1)], 2^-2 ~ 2^4, 0.25 ~ 16, default of LogisticRegressionCV is 1e-4 ~ 1e4 (10 steps)
 			clf = LogisticRegression(solver='lbfgs', random_state=self.params.seed,
-				class_weight='balanced', # TODO not sure
+				# class_weight='balanced', # TODO not sure
 				max_iter=1000) # if the estimator is a classifier and y is either binary or multiclass, StratifiedKFold is used. In all other cases, KFold is used.
 			
 			if len(np.unique(y)) == 2: # binary

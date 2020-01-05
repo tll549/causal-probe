@@ -111,8 +111,9 @@ class PyTorchClassifier(object):
                 self.optimizer.step()
         self.nepoch += epoch_size
 
-    def score(self, devX, devy):
+    def score(self, devX, devy, return_pred=False):
         self.model.eval()
+        preds = []
         correct = 0
         if not isinstance(devX, torch.cuda.FloatTensor) or self.cudaEfficient:
             devX = torch.FloatTensor(devX).cuda()
@@ -126,9 +127,14 @@ class PyTorchClassifier(object):
                     ybatch = ybatch.cuda()
                 output = self.model(Xbatch)
                 pred = output.data.max(1)[1]
+                # print(pred.to)
+                preds += pred.tolist() # added
                 correct += pred.long().eq(ybatch.data.long()).sum().item()
             accuracy = 1.0 * correct / len(devX)
-        return accuracy
+        if not return_pred: # added by me
+            return accuracy
+        else:
+            return accuracy, preds
 
     def predict(self, devX):
         self.model.eval()
