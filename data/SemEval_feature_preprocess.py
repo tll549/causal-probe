@@ -19,17 +19,18 @@ class DataLoader(object):
 		self.X, self.y = [], []
 		self.rel = []
 
-	def read(self, data_path):
-		with open(data_path) as f:
-			next_is_y = False
-			for line in f:
-				if line[0].isnumeric():
-					self.X.append(line.split('\t')[1].split('\n')[0]) # only extract the sentence part
-					next_is_y = True
-				else:
-					if next_is_y:
-						self.y.append(line.split('\n')[0])
-						next_is_y = False
+	def read(self, data_path_both):
+		for data_path in data_path_both:
+			with open(data_path) as f:
+				next_is_y = False
+				for line in f:
+					if line[0].isnumeric():
+						self.X.append(line.split('\t')[1].split('\n')[0]) # only extract the sentence part
+						next_is_y = True
+					else:
+						if next_is_y:
+							self.y.append(line.split('\n')[0])
+							next_is_y = False
 		logging.debug(f'loaded X len: {len(self.X)}')
 
 	def preprocess(self, trial=False):
@@ -54,10 +55,13 @@ class DataLoader(object):
 				if i >= 9:
 					break
 
-		self.X= X
+		self.X = X
 		self.sub, self.obj = sub, obj
 
 		logging.info(f'processed len X: {len(self.sub)}, causal: {sum([rel == "Cause-Effect" for rel in self.rel])}')
+
+		self.output = pd.DataFrame({'X': self.X, 
+			'causal': [l == 'Cause-Effect' for l in self.rel]})
 
 	def calc_prob(self):
 		def tokenize(X):

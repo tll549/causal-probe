@@ -29,7 +29,7 @@ CONCEPTNET_PATH = 'examples/conceptnet/numberbatch-en-19.08.txt.gz'
 DATAPATH = 'data/causal_probing/'
 
 SEMEVAL_PATH = 'SemEval_2010_8'
-SEMEVAL_DATA = 'TRAIN_FILE.TXT' # 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
+SEMEVAL_DATA = ['TRAIN_FILE.TXT', 'TEST_FILE_FULL.TXT'] # 'data/causal_probing/SemEval_2010_8/raw/TRAIN_FILE.TXT'
 
 ROC_PATH = 'ROCStories'
 ROC_DATA = 'ROCstories-20191212T222034Z-001.zip' # 'data/causal_probing/ROCStories/ROCstories-20191212T222034Z-001.zip'
@@ -58,7 +58,8 @@ class engine(object):
 
 		# raw data path
 		if self.params.dataset == 'semeval':
-			self.raw_datapath = os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA)
+			self.raw_datapath = [os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA[0]),
+				os.path.join(DATAPATH, SEMEVAL_PATH, 'raw', SEMEVAL_DATA[1])]
 		elif self.params.dataset == 'because':
 			self.raw_datapath = os.path.join(DATAPATH, BECAUSE_PATH)
 		elif self.params.dataset == 'roc':
@@ -126,7 +127,6 @@ class engine(object):
 
 		self.load_data()
 		self.prepare_data()
-		# self.prepare_encoder() # no need if use the new self.encode
 
 		if self.params.probing_task == 'simple':
 			self.result = []
@@ -138,6 +138,7 @@ class engine(object):
 				embeddings = utils.load_newest(encoded_model_path)
 				logging.info(f'all encoded data loaded')
 
+				logging.info(f'start training...')
 				result_raw, result_pred = self.train(embeddings, self.data.causal, return_pred=True)
 				for r in result_raw:
 					r['model'] = model
@@ -190,9 +191,9 @@ class engine(object):
 		logging.info('preprocessing data...')
 		if self.params.probing_task == 'simple':
 			if self.params.dataset == 'semeval':
-				dl = SemEval_preprocess.DataLoader()
+				dl = SemEval_feature_preprocess.DataLoader() # change to use feature_preprocess cuz its compatible
 				dl.read(self.raw_datapath)
-				dl.preprocess(probing_task='simple')
+				dl.preprocess(trial=self.params.trial)
 
 			elif self.params.dataset == 'because':
 				dl = BECAUSE_preprocess.DataLoader()
@@ -682,7 +683,6 @@ class engine(object):
 					{'metric': 'accuracy', 'split': 'dev', 'value': devaccuracy},
 					{'metric': 'accuracy', 'split': 'test', 'value': testaccuracy}]
 			
-			# print(result_raw)
 			# logging.info('done testing')
 			if not return_pred:
 				return result_raw
