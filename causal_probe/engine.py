@@ -68,7 +68,8 @@ class engine(object):
 		# processed data path, encoded data path, result csv data path, and fig data path
 		if self.params.probing_task == 'simple':
 			config_filename = ('TRIAL_' if self.params.trial else '') + \
-				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)])
+				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)]) + \
+				('_swap_cause_effect' if self.params.swap_cause_effect else '')
 			if self.params.dataset == 'semeval':
 				dataset_path = SEMEVAL_PATH
 			elif self.params.dataset == 'because':
@@ -78,9 +79,9 @@ class engine(object):
 
 			# universal setting?
 			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
-				f'{self.params.probing_task}.csv') # should also use config_filename?
+				f'{config_filename}.csv')
 			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
-				f'{self.params.probing_task}') # should also use config_filename?
+				f'{config_filename}')
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
 			self.result_pred_datapath = os.path.join(LOGS_PATH, f'result_pred_{config_filename}.csv')
 			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}.png')
@@ -139,15 +140,19 @@ class engine(object):
 				logging.info(f'all encoded data loaded')
 
 				logging.info(f'start training...')
+
 				result_raw, result_pred = self.train(embeddings, self.data.causal, return_pred=True)
+				
 				for r in result_raw:
 					r['model'] = model
 				self.result += result_raw
-				result_pred['model'] = [model] * len(result_pred['true'])
-				self.result_pred = self.result_pred.append(pd.DataFrame(result_pred), ignore_index=True)
+				if result_pred: # TODO, result_pred is None when not using pytorch
+					result_pred['model'] = [model] * len(result_pred['true'])
+					self.result_pred = self.result_pred.append(pd.DataFrame(result_pred), ignore_index=True)
 			self.result = pd.DataFrame(self.result, columns=['model', 'metric', 'split', 'value'])
 			utils.save_dt(self.result, self.result_datapath)
-			utils.save_dt(self.result_pred, self.result_pred_datapath)
+			if result_pred:
+				utils.save_dt(self.result_pred, self.result_pred_datapath)
 
 			self.plot_metrics(self.fig_datapath)
 
@@ -193,7 +198,7 @@ class engine(object):
 			if self.params.dataset == 'semeval':
 				dl = SemEval_feature_preprocess.DataLoader() # change to use feature_preprocess cuz its compatible
 				dl.read(self.raw_datapath)
-				dl.preprocess(trial=self.params.trial)
+				dl.preprocess(trial=self.params.trial, swap_cause_effect=self.params.swap_cause_effect)
 
 			elif self.params.dataset == 'because':
 				dl = BECAUSE_preprocess.DataLoader()
@@ -348,7 +353,7 @@ class engine(object):
 
 		elif model == 'glove':
 			samples = self.data['X']
-			samples = [s.split() for s in samples]
+			samples = [[w.lower() for w in word_tokenize(sent)] for sent in samples]
 			# Create dictionary
 			def create_dictionary(sentences, threshold=0):
 				words = {}
@@ -685,7 +690,7 @@ class engine(object):
 			
 			# logging.info('done testing')
 			if not return_pred:
-				return result_raw
+				return result_raw, None
 			else:
 				return result_raw, result_pred
 
@@ -707,7 +712,7 @@ class engine(object):
 
 			result_raw = [{'metric': k, 'value': v} for k in scoring for v in cv_results[f'test_{k}']]
 			logging.info('done training')
-			return result_raw
+			return result_raw, None
 
 	def save_pred_mask(self):
 		lines_pred = ['\t'.join([str(x) for x in l]) + '\n' for l in self.pred]

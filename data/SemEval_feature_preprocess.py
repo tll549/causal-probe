@@ -33,7 +33,7 @@ class DataLoader(object):
 							next_is_y = False
 		logging.debug(f'loaded X len: {len(self.X)}')
 
-	def preprocess(self, trial=False):
+	def preprocess(self, trial=False, swap_cause_effect=False):
 		all_relations_dict = {k:re.sub(r'\(e\d,e\d\)', '', k) for k in list(set(self.y))}
 
 		X, y = [], []
@@ -48,7 +48,11 @@ class DataLoader(object):
 			obj_temp = e2 if '(e1,e2)' in self.y[i] else e1
 			sub.append(sub_temp)
 			obj.append(obj_temp)
-			x = re.sub(r'</?e\d>', '', self.X[i])[1:-1]
+			if swap_cause_effect:
+				x = re.sub(e1_pattern, obj_temp if '(e1,e2)' in self.y[i] else sub_temp, self.X[i])
+				x = re.sub(e2_pattern, sub_temp if '(e1,e2)' in self.y[i] else obj_temp, x)[1:-1]
+			else:
+				x = re.sub(r'</?e\d>', '', self.X[i])[1:-1]
 			X.append(x)
 
 			if trial:

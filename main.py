@@ -100,6 +100,8 @@ def get_args():
         help='the dataset used as ground truth corpus to calc conditional probabilities')
     parser.add_argument('-reset_data', type=int, default=0,
         help='bool')
+    parser.add_argument('-swap_cause_effect', action='store_true',
+        help='swap cause and effect, use for simple probe')
     parser.add_argument('-reencode_data', type=int, default=0,
         help='bool')
     parser.add_argument('-seed', type=int, default=555)
@@ -296,6 +298,7 @@ if __name__ == '__main__':
             'probing_task': args.probe,
             'dataset': args.dataset,
             'reset_data': args.reset_data,
+            'swap_cause_effect': args.swap_cause_effect,
             'reencode_data': args.reencode_data,
             'seed': args.seed,
             'pretrained': {
