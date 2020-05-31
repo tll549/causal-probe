@@ -48,11 +48,16 @@ class DataLoader(object):
 			obj_temp = e2 if '(e1,e2)' in self.y[i] else e1
 			sub.append(sub_temp)
 			obj.append(obj_temp)
+
 			if swap_cause_effect:
 				x = re.sub(e1_pattern, obj_temp if '(e1,e2)' in self.y[i] else sub_temp, self.X[i])
 				x = re.sub(e2_pattern, sub_temp if '(e1,e2)' in self.y[i] else obj_temp, x)[1:-1]
 			else:
 				x = re.sub(r'</?e\d>', '', self.X[i])[1:-1]
+
+			x = re.sub(r"(.) 's ", r"\1's ", x) # one's becomes one 's in original dataset
+			x = re.sub(r" '(.*?)'", r' "\1"', x) # originally semeval use 'sth' instead of "sth", chage it back but don't touch
+			
 			X.append(x)
 
 			if trial:
@@ -150,8 +155,8 @@ class DataLoader(object):
 				for sent in sentences:
 					tok = [w.lower() for w in word_tokenize(sent)]
 					self.num_sent += 1
-					c_in = self.output.cause.isin(tok)
-					e_in = self.output.effect.isin(tok)
+					c_in = self.output.cause.str.lower().isin(tok)
+					e_in = self.output.effect.str.lower().isin(tok)
 					self.output.c_count += c_in
 					self.output.e_count += e_in
 					self.output.c_e_count += c_in & e_in

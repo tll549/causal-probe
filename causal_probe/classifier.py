@@ -1,3 +1,6 @@
+# This file is modified from SentEval
+# https://github.com/facebookresearch/SentEval
+
 # Copyright (c) 2017-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -14,7 +17,6 @@ from __future__ import absolute_import, division, unicode_literals
 
 import numpy as np
 import copy
-from senteval import utils
 
 import torch
 from torch import nn

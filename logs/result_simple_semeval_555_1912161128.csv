@@ -1,5 +1,0 @@
-,model,metric,value
-0,bert,accuracy,94.22
-1,bert,accuracy,0.93125
-2,glove,accuracy,87.34
-3,glove,accuracy,0.87125

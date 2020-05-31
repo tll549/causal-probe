@@ -8,8 +8,8 @@ import re
 from causal_probe import utils
 from data import SemEval_preprocess
 from data import SemEval_feature_preprocess
-from data import ROC_preprocess
-from data import BECAUSE_preprocess
+# from data import ROC_preprocess
+# from data import BECAUSE_preprocess
 
 from nltk.tokenize import word_tokenize
 
@@ -36,6 +36,9 @@ ROC_DATA = 'ROCstories-20191212T222034Z-001.zip' # 'data/causal_probing/ROCStori
 
 BECAUSE_PATH = 'BECAUSE'
 # BECAUSE_DATA path is specify in BECAUSE_preprocess
+
+BIOCAUSAL_PATH = 'BioCausal'
+BIOCAUSAL_DATA = 'Causaly_small.csv'
 
 OANC_DATA = 'OANC_GrAF.zip' # 'data/causal_probing/OANC_GrAF.zip'
 
@@ -64,18 +67,23 @@ class engine(object):
 			self.raw_datapath = os.path.join(DATAPATH, BECAUSE_PATH)
 		elif self.params.dataset == 'roc':
 			self.raw_datapath = os.path.join(DATAPATH, ROC_PATH, ROC_DATA)
+		elif self.params.dataset == 'biocausal':
+			self.raw_datapath = os.path.join(DATAPATH, BIOCAUSAL_PATH, 'raw', BIOCAUSAL_DATA)
 
 		# processed data path, encoded data path, result csv data path, and fig data path
 		if self.params.probing_task == 'simple':
 			config_filename = ('TRIAL_' if self.params.trial else '') + \
 				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)]) + \
-				('_swap_cause_effect' if self.params.swap_cause_effect else '')
+				('_swap_cause_effect' if self.params.swap_cause_effect else '') + \
+				('_large' if self.params.model_type == 'large' else '')
 			if self.params.dataset == 'semeval':
 				dataset_path = SEMEVAL_PATH
 			elif self.params.dataset == 'because':
 				dataset_path = BECAUSE_PATH
 			elif self.params.dataset == 'roc':
 				dataset_path = ROC_PATH
+			elif self.params.dataset == 'biocausal':
+				dataset_path = BIOCAUSAL_PATH
 
 			# universal setting?
 			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
@@ -93,14 +101,16 @@ class engine(object):
 			
 			# e.g., TRIAL_mask_semeval_cause_555
 			config_filename = ('TRIAL_' if self.params.trial else '') + \
-				'_'.join([self.params.probing_task, self.params.dataset, self.params.mask, str(self.params.seed)])
+				'_'.join([self.params.probing_task, self.params.dataset, self.params.mask, str(self.params.seed)]) + \
+				('_large' if self.params.model_type == 'large' else '')
 			self.pred_datapath = os.path.join(LOGS_PATH, 'pred_' + config_filename) # without extension
 			self.acc_datapath = os.path.join(LOGS_PATH, 'acc_' + config_filename)
 			self.fig_datapath = os.path.join(LOGS_PATH, 'fig_' + config_filename)
 
 		elif self.params.probing_task == 'feature':
 			config_filename = ('TRIAL_' if self.params.trial else '') + \
-				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed)])
+				'_'.join([self.params.probing_task, self.params.dataset, str(self.params.seed),
+					self.params.subset_data])
 			if self.params.dataset == 'semeval':
 				dataset_path = SEMEVAL_PATH
 			# elif self.params.dataset == 'because':
@@ -109,9 +119,9 @@ class engine(object):
 				dataset_path = ROC_PATH
 
 			self.processed_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
-				f'{self.params.probing_task}.csv')  # should also use config_filename?
+				f'{self.params.probing_task}_{self.params.subset_data}.csv')  # should also use config_filename?
 			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
-				f'{self.params.probing_task}') # should also use config_filename?
+				f'{self.params.probing_task}_{self.params.subset_data}') # should also use config_filename?
 
 			# self.result_datapath = LOGS_PATH + f'{self.params.dataset}_feature_result.csv'
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
@@ -121,6 +131,8 @@ class engine(object):
 			'_TRIAL' if self.params.trial else '',
 			self.params.dataset, self.params.probing_task, 
 			self.params.mask, self.params.seed)
+
+		logging.info(f'config_filename: {config_filename}')
 
 	def eval(self):
 		if self.params.reset_data: # TEMP
@@ -209,6 +221,14 @@ class engine(object):
 				dl = ROC_preprocess.DataLoader()
 				dl.read(self.raw_datapath)
 				dl.preprocess(trial=self.params.trial)
+
+			elif self.params.dataset == 'biocausal':
+				# already clean
+				d = pd.read_csv(self.raw_datapath)
+				d = d.rename(columns={'Sentence': 'X', 'Annotated_Causal': 'causal'})
+				utils.save_dt(d, self.processed_datapath)
+				return
+
 			dl.save_output(self.processed_datapath)
 
 		elif self.params.probing_task == 'mask':
@@ -238,12 +258,13 @@ class engine(object):
 
 	def load_data(self):
 		if self.params.probing_task == 'mask':
-			self.data = {'X_orig': [], 'y': [], 'rel': []}
+			self.data = {'X_orig': [], 'y': [], 'y2': [], 'rel': []}
 			with io.open(self.processed_datapath, 'r', encoding='utf-8') as f:
 				for line in f:
 					# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
 					line = line.rstrip().split('\t')
 					self.data['y'].append(line[1])
+					self.data['y2'].append(line[4])
 					self.data['X_orig'].append(line[2])
 					self.data['rel'].append(line[3])
 			logging.info(f'Loaded {len(self.data["X_orig"])}')
@@ -254,6 +275,14 @@ class engine(object):
 
 	def prepare_data(self):
 		if self.params.probing_task == 'simple':
+			if self.params.subset_data == 'downsampling':
+				n = self.data.causal.sum()
+				causal = self.data[self.data.causal]
+				noncausal = self.data[~self.data.causal].sample(n, random_state=self.params.seed)
+				self.data = pd.concat([causal, noncausal], axis=0)
+				self.data = self.data.sample(frac=1, random_state=self.params.seed + 1).reset_index(drop=True) # shuffle
+				logging.info('downsmpling donw')
+				logging.debug(self.data.causal.value_counts(dropna=False))
 			return
 
 		elif self.params.probing_task == 'mask':
@@ -308,10 +337,7 @@ class engine(object):
 				shuf_trunc = truncate(shuf)
 				self.data['X_shuf_trunc'].append(shuf_trunc)
 			
-			# print(self.data['X_orig'][7555])
-			# print(self.data['X_shuf'][7555])
-			# print(self.data['X_trunc'][7555])
-			# print(self.data['X_shuf_trunc'][7555])
+			# print(self.data['y'])
 
 		elif self.params.probing_task == 'feature':
 			# # self.backup_data = self.data.copy()
@@ -329,6 +355,17 @@ class engine(object):
 
 			self.all_target_columns = [c[:-4] for c in self.data.columns if '_cat' in c]
 			self.data.columns = [c if '_cat' not in c else c[:-4] for c in self.data.columns]
+
+			self.data = self.data[self.data.relation == 'Cause-Effect']  # TEMP only predict cause-effect so faster
+
+			if self.params.subset_data in ['explicit', 'implicit', 'explicit_down']:
+				print(self.data.shape)
+				self.data['explicit'] = self.data.X.apply(lambda x: utils.detect_kw(word_tokenize(x)))
+				self.data = self.data[self.data.explicit == True if self.params.subset_data == 'explicit' else self.data.explicit == False]
+
+				if self.params.subset_data == 'explicit_down':
+					self.data = self.data.sample(527) # same size as implicit
+				print(self.data.shape)
 
 	def encode(self, model, save_path):
 		'''prepare different encoders and save to save_path'''
@@ -395,8 +432,8 @@ class engine(object):
 				return word_vec
 			params.word_vec = get_wordvec(GLOVE_PATH, params.word2id)
 			params.wvec_dim = 300
-			logging.debug(f'word2id: {params.word2id["man"]}') # 90
-			logging.debug(f'word2vec: {params.word_vec["man"][:5]}') # 300
+			# logging.debug(f'word2id: {params.word2id["man"]}') # 90
+			# logging.debug(f'word2vec: {params.word_vec["man"][:5]}') # 300
 
 		elif model == 'conceptnet':
 			import gzip
@@ -425,13 +462,13 @@ class engine(object):
 				pb.now(i)
 
 				if model == 'bert':
-					x = '[CLS] ' + self.data.X[i] + ' [SEP]'
+					x = '[CLS] ' + self.data.X.iloc[i] + ' [SEP]'
 				elif model == 'gpt2':
-					x = self.data.X[i]
+					x = self.data.X.iloc[i]
 
 				tokenized_text = self.params.tokenizer.tokenize(x)
 				# double check tokenize correctly, previous version of transformers has some problems
-				if self.data.X[i] == 'The system as described above has its greatest application in an arrayed configuration of antenna elements.':
+				if self.data.X.iloc[i] == 'The system as described above has its greatest application in an arrayed configuration of antenna elements.':
 					if model == 'bert':
 						assert tokenized_text == ['[CLS]', 'the', 'system', 'as', 'described', 'above', 'has', 'its', 'greatest', 'application', 'in', 'an', 'array', '##ed', 'configuration', 'of', 'antenna', 'elements', '.', '[SEP]']
 					elif model == 'gpt2':
@@ -453,6 +490,7 @@ class engine(object):
 
 		elif model == 'glove' or model == 'conceptnet':
 			embeddings = []
+			record_not_in_glove = []
 			for sent in self.data.X:
 				# tokenize
 				sent = [w.lower() for w in word_tokenize(sent)]
@@ -462,6 +500,8 @@ class engine(object):
 				for word in sent:
 					if word in params.word_vec:
 						sentvec.append(params.word_vec[word])
+					else:
+						record_not_in_glove.append(word)
 				if not sentvec:
 					vec = np.zeros(params.wvec_dim)
 					sentvec.append(vec)
@@ -472,6 +512,7 @@ class engine(object):
 					break
 
 			embeddings = np.vstack(embeddings)
+			print(f'words not in glove ({len(record_not_in_glove)}): {record_not_in_glove}')
 
 		utils.save_dt(embeddings, save_path)
 		logging.info(f'data encoded by {model}, embeddings shape: {embeddings.shape}')
@@ -479,33 +520,37 @@ class engine(object):
 
 	def predict_mask(self):
 		logging.info('predicting...')
-		k_list = [1, 3, 5, 7, 9, 10, 20]
-		X_types = ['X_orig', 'X_shuf', 'X_trunc', 'X_shuf_trunc']
+		k_list = [1, 3, 5, 7, 9, 10, 20, 10000]
+		X_types = ['X_orig', 'X_trunc', 'X_shuf', 'X_shuf_trunc']
 		correct = {rel:{k:{X_type:[] for X_type in X_types} for k in k_list} for rel in list(set(self.data['rel']))}
 		self.pred = []
+
+		tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+		encoder = BertForMaskedLM.from_pretrained('bert-base-uncased')
+		encoder.eval()
 		
 		pb = utils.ProgressBar(len(self.data['X_orig']))
 		for i in range(len(self.data['X_orig'])):
 			pb.now(i)
 			pred = []
-			y = self.data['y'][i]
+			y, y2 = self.data['y'][i], self.data['y2'][i]
 			rel = self.data['rel'][i]
 			for X_type in X_types:
 				x = self.data[X_type][i]
 
 				# print(x)
-				tokenized_text = self.params.tokenizer.tokenize(x)
+				tokenized_text = tokenizer.tokenize(x)
 				# print(tokenized_text)
-				indexed_tokens = self.params.tokenizer.convert_tokens_to_ids(tokenized_text)
+				indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
 				# print(indexed_tokens)
 				masked_index = [i for i in range(len(tokenized_text)) if tokenized_text[i] == '[MASK]']
 				# print(masked_index)
 				tokens_tensor = torch.tensor([indexed_tokens])
-				tokens_tensor = tokens_tensor.to(DEVICE)
+				tokens_tensor = tokens_tensor
 				# print(tokens_tensor.shape)
 
 				with torch.no_grad():
-					outputs = self.params.encoder(tokens_tensor)
+					outputs = encoder(tokens_tensor)
 					# print(len(outputs))
 					predictions = outputs[0]
 				# print(predictions.shape) # 1, 19, 768
@@ -515,7 +560,7 @@ class engine(object):
 				top_inds = torch.argsort(soft_pred, descending=True)[:, :k_list[-1]].cpu().numpy()
 				# print(top_inds.shape) # 2, 5
 				# top_probs = [soft_pred[tgt_ind].item() for tgt_ind in top_inds]
-				top_k_preds = [self.params.tokenizer.convert_ids_to_tokens(top_inds[to_pred, :]) \
+				top_k_preds = [tokenizer.convert_ids_to_tokens(top_inds[to_pred, :]) \
 					for to_pred in range(top_inds.shape[0])]
 				# print(top_k_preds)
 				# print(y)
@@ -537,7 +582,7 @@ class engine(object):
 					correct[rel][k][X_type].append(int(correct_at <= k and correct_at != 0))
 
 				pred += [x, top_k_preds, correct_at]
-			pred = [y, rel] + pred
+			pred = [y, y2, rel] + pred
 			self.pred.append(pred)
 
 			if self.params.trial:
@@ -546,6 +591,13 @@ class engine(object):
 				if i == 8:
 					break
 		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
+		self.pred = pd.DataFrame(self.pred, columns=['true', 'y2', 'relation', 
+			'X_orig', 'y_orig', 'correct_pos_orig',
+			'X_trunc', 'y_trunc', 'correct_pos_trunc',
+			'X_shuf', 'y_shuf', 'correct_pos_shuf',
+			'X_shuf_trunc', 'y_shuf_trunc', 'correct_pos_shuf_trunc'])
+		# pd.set_option('display.max_columns', 1000)
+		# print(self.pred)
 		# logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
 
 	def predict_feature(self, cv):
@@ -561,8 +613,6 @@ class engine(object):
 
 		result = []
 		for rel in self.data.relation.unique():
-			if rel != 'Cause-Effect': # TEMP only predict cause-effect so tons faster
-				continue
 			for y_name in self.all_target_columns:
 				X = self.embeddings[np.array(self.data.relation == rel), :]
 				y = self.data.loc[self.data.relation == rel, y_name]
@@ -577,7 +627,7 @@ class engine(object):
 
 				if self.params.use_pytorch:
 					logging.info(f'start training {rel} {y_name}')
-					result_raw = self.train(X, y)
+					result_raw, _ = self.train(X, y)
 					for r in result_raw:
 						r.update({'relation': rel, 'y_type': y_name})
 					# print(result_raw)
@@ -716,7 +766,9 @@ class engine(object):
 
 	def save_pred_mask(self):
 		lines_pred = ['\t'.join([str(x) for x in l]) + '\n' for l in self.pred]
-		utils.save_dt(lines_pred, self.pred_datapath + '.txt')
+		# utils.save_dt(lines_pred, self.pred_datapath + '.txt')
+		# utils.save_dt(self.pred, self.pred_datapath + '.pkl')
+		utils.save_dt(self.pred, self.pred_datapath + '.csv')
 		utils.save_dt(self.pred, self.pred_datapath + '.pkl')
 
 		lines_acc = [k + ' : ' + str(v) + '\n' for k, v in self.acc.items()]
@@ -741,6 +793,13 @@ class engine(object):
 				palette='Set1')
 			# g.savefig(path + 'fig_' + rel + self.last_filename + '.png',
 			# 	dpi=600, bbox_inches='tight')
+
+			g.set_xticklabels(['1', '3', '5', '7', '9', '10', '20'])
+			g.set_ylabels('Accuracy')
+			g._legend.set_title('Perturbation')
+			new_labels = ['Original', 'Truncation', 'Shuffle', 'Shuf + Trunc']
+			for t, l in zip(g._legend.texts, new_labels): t.set_text(l)
+
 			utils.save_dt(g, self.fig_datapath + f'_{rel}.png', dpi=600, bbox_inches='tight')
 
 		# logging.info('fig saved')

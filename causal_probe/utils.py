@@ -127,3 +127,22 @@ def load_newest(path_name_ext):
 
 	logging.info(f'{newest_path_name_ext} loaded')
 	return data
+
+explicit_kw = ['cause', 'caused', 'causes', 'causing', 
+               'result', 'resulted', 'results', 'resulting',
+               'due', # prepositions
+               'because', 'since', 'so that', # conjunctions
+               'so', 'therefore', 'thus', # adverbial connectors
+               'the reason why', 'the result is', 'that is why', # clause-integrated expressions
+               'lead to' # mine
+              ]
+def detect_kw(tok, kw_list=explicit_kw):
+    '''detect if ['ab', 'bc', 'cd'], ['bc', 'ef']'''
+    for w in tok:
+        for kw in kw_list:
+            if kw == w:
+                return True
+            if ' ' in kw:
+                if kw in ' '.join(tok):
+                    return True
+    return False
