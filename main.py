@@ -12,9 +12,6 @@ logging.basicConfig(level=logging.INFO,
 
 import argparse
 
-# Set PATHs
-# PATH_TO_SENTEVAL = '.'
-# PATH_TO_DATA = 'data'
 PATH_TO_VEC = 'examples/glove/glove.840B.300d.txt'
 
 import causal_probe
@@ -27,7 +24,6 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from transformers import BertTokenizer, BertModel
 
 def get_args():
-    '''https://github.com/lingyugao/causal/blob/master/main.py#L101'''
     parser = argparse.ArgumentParser(description='')
 
     # global path parameters
@@ -39,7 +35,6 @@ def get_args():
 
     # model settings
     parser.add_argument('-model', type=str, default='bert', 
-        # choices=['bert', 'spanbert', 'roberta', 'xlnet', 'gpt2', 'glove'],
         choices=['bert', 'glove', 'conceptnet', 'gpt2', 'ALL'],
         help='choose model(bert, spanbert, roberta, gpt2)')
     parser.add_argument('-model_type', type=str, default='base',
@@ -63,18 +58,9 @@ def get_args():
     parser.add_argument('-optim', type=str, default='rmsprop',
                         help='optimizer ("sgd,lr=0.1", "adam", "rmsprop" ..)')
 
-    # specify task
-    # parser.add_argument('-transfer_task', type=str, nargs='*', default='Length',
-    #                     help='Length, WordContent, Depth, TopConstituents, BigramShift, '
-    #                          'Tense, SubjNumber, ObjNumber, OddManOut, CoordinationInversion')
-
     # # log output
     parser.add_argument('-log_to_file', action='store_true',
                         help='log to file')
-    #
-    # # output settings
-    # parser.add_argument('-output_test', action='store_true',
-    #                     help='use test set and output the result')
 
 
     # probing task
@@ -114,7 +100,7 @@ def get_args():
         help='how to divide numerical target variables to classes (default: quantile), linear will cause imbalance data')
 
     return parser.parse_args()
-    
+
 
 if __name__ == '__main__':
     args = get_args()

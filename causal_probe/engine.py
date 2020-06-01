@@ -97,7 +97,6 @@ class engine(object):
 		if self.params.probing_task == 'mask':
 			self.processed_datapath = os.path.join(DATAPATH, SEMEVAL_PATH, 'processed', 
 				f'{self.params.probing_task}_{self.params.mask}.txt') # 'data/causal_probing/SemEval_2010_8/processed/mask_cause.txt'
-			# self.processed_datapath = SemEval_mask_PROCESSED_DATAPATH + f'_{self.params.mask}_processed.txt'
 			
 			# e.g., TRIAL_mask_semeval_cause_555
 			config_filename = ('TRIAL_' if self.params.trial else '') + \
@@ -113,8 +112,6 @@ class engine(object):
 					self.params.subset_data])
 			if self.params.dataset == 'semeval':
 				dataset_path = SEMEVAL_PATH
-			# elif self.params.dataset == 'because':
-			# 	dataset_path = BECAUSE_PATH
 			elif self.params.dataset == 'roc':
 				dataset_path = ROC_PATH
 
@@ -123,7 +120,6 @@ class engine(object):
 			self.encoded_datapath = os.path.join(DATAPATH, dataset_path, 'processed', 
 				f'{self.params.probing_task}_{self.params.subset_data}') # should also use config_filename?
 
-			# self.result_datapath = LOGS_PATH + f'{self.params.dataset}_feature_result.csv'
 			self.result_datapath = os.path.join(LOGS_PATH, f'result_{config_filename}.csv')
 			self.fig_datapath = os.path.join(LOGS_PATH, f'fig_{config_filename}')
 
@@ -201,9 +197,6 @@ class engine(object):
 			else:
 				self.plot_acc_f1(self.result_datapath)
 
-		# elif self.params.probing_task == 'choice':
-		# 	print('123')
-
 	def preprocess_data(self):
 		logging.info('preprocessing data...')
 		if self.params.probing_task == 'simple':
@@ -236,7 +229,6 @@ class engine(object):
 				dl = SemEval_preprocess.DataLoader()
 				dl.read(self.raw_datapath)
 				dl.preprocess(self.params.probing_task, mask=self.params.mask)
-				# dl.split(dev_prop=0.2, test_prop=0.2, seed=self.params.seed)
 				dl.write(self.processed_datapath)
 
 		elif self.params.probing_task == 'feature':
@@ -261,7 +253,6 @@ class engine(object):
 			self.data = {'X_orig': [], 'y': [], 'y2': [], 'rel': []}
 			with io.open(self.processed_datapath, 'r', encoding='utf-8') as f:
 				for line in f:
-					# line = 'te	gardens	[CLS] The winery includes [MASK]. [SEP]	Component-Whole'
 					line = line.rstrip().split('\t')
 					self.data['y'].append(line[1])
 					self.data['y2'].append(line[4])
@@ -315,7 +306,6 @@ class engine(object):
 					end_idx += -start_idx
 					start_idx = 0
 				elif end_idx >= len(x):
-					# print(end_idx, len(x))
 					start_idx -= end_idx - len(x) + 1
 					start_idx = 0 if start_idx < 0 else start_idx
 				x = x[start_idx:end_idx+1]
@@ -337,19 +327,7 @@ class engine(object):
 				shuf_trunc = truncate(shuf)
 				self.data['X_shuf_trunc'].append(shuf_trunc)
 			
-			# print(self.data['y'])
-
 		elif self.params.probing_task == 'feature':
-			# # self.backup_data = self.data.copy()
-			# # self.data = self.data.drop(columns=['cause', 'effect', 'c_count', 'e_count', 'c_e_count', 'e_no_c_count'])
-			# use_cols = ['X', 'relation'] + [x if x in self.binary_columns else x+'_cat' for x in self.all_target_columns]
-			# use_cols = [c for c in self.data.columns if c in use_cols] # this excludes -inf ['ovr_freq_tri_cat', 'avg_freq_tri_cat', 'ovr_freq_uni_cat', 'ovr_freq_bi_cat']
-			# self.data = self.data[use_cols]
-			# # self.data.columns = ['X', 'relation'] + self.all_target_columns
-			# self.data.columns = [c[:-4] if '_cat' in c else c for c in self.data.columns]
-			# # self.all_target_columns = self.data.columns[:3]
-			# # print(self.data.columns)
-
 			use_cols = ['X', 'relation'] + [c for c in self.data.columns if '_cat' in c]
 			self.data = self.data[use_cols]
 
@@ -376,10 +354,6 @@ class engine(object):
 			bert_type = f'bert-{params.pretrained.model_type}-{"cased" if params.pretrained.cased else "uncased"}'
 			logging.getLogger('transformers').setLevel(logging.ERROR)
 			params.tokenizer = BertTokenizer.from_pretrained(bert_type)
-			# if self.params.probing_task == 'mask':
-			# 	params.encoder = BertForMaskedLM.from_pretrained(bert_type).to(DEVICE)
-			# else:
-			# 	params.encoder = BertModel.from_pretrained('bert-base-uncased')
 			params.encoder = BertModel.from_pretrained(bert_type)
 			params.encoder.eval() # ??
 
@@ -432,9 +406,7 @@ class engine(object):
 				return word_vec
 			params.word_vec = get_wordvec(GLOVE_PATH, params.word2id)
 			params.wvec_dim = 300
-			# logging.debug(f'word2id: {params.word2id["man"]}') # 90
-			# logging.debug(f'word2vec: {params.word_vec["man"][:5]}') # 300
-
+			
 		elif model == 'conceptnet':
 			import gzip
 
@@ -482,7 +454,6 @@ class engine(object):
 					encoded_layers = outputs[0]
 
 				embeddings[i, :] = torch.mean(encoded_layers, dim=1)
-				# print(encoded_layers.shape)
 
 				if self.params.trial:
 					break
@@ -494,7 +465,6 @@ class engine(object):
 			for sent in self.data.X:
 				# tokenize
 				sent = [w.lower() for w in word_tokenize(sent)]
-				# print(sent) # ['the', 'system', 'as', 'described', 'above', 'has', 'its', 'greatest', 'application', 'in', 'an', 'arrayed', 'configuration', 'of', 'antenna', 'elements', '.']
 
 				sentvec = []
 				for word in sent:
@@ -516,7 +486,6 @@ class engine(object):
 
 		utils.save_dt(embeddings, save_path)
 		logging.info(f'data encoded by {model}, embeddings shape: {embeddings.shape}')
-		# return embeddings
 
 	def predict_mask(self):
 		logging.info('predicting...')
@@ -538,47 +507,27 @@ class engine(object):
 			for X_type in X_types:
 				x = self.data[X_type][i]
 
-				# print(x)
 				tokenized_text = tokenizer.tokenize(x)
-				# print(tokenized_text)
 				indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
-				# print(indexed_tokens)
 				masked_index = [i for i in range(len(tokenized_text)) if tokenized_text[i] == '[MASK]']
-				# print(masked_index)
 				tokens_tensor = torch.tensor([indexed_tokens])
 				tokens_tensor = tokens_tensor
-				# print(tokens_tensor.shape)
 
 				with torch.no_grad():
 					outputs = encoder(tokens_tensor)
-					# print(len(outputs))
 					predictions = outputs[0]
-				# print(predictions.shape) # 1, 19, 768
-				# print(predictions[0, masked_index].shape) # 2, 768
 				soft_pred = torch.softmax(predictions[0, masked_index], 1)
-				# print(soft_pred.shape) # 2, 768
 				top_inds = torch.argsort(soft_pred, descending=True)[:, :k_list[-1]].cpu().numpy()
-				# print(top_inds.shape) # 2, 5
-				# top_probs = [soft_pred[tgt_ind].item() for tgt_ind in top_inds]
 				top_k_preds = [tokenizer.convert_ids_to_tokens(top_inds[to_pred, :]) \
 					for to_pred in range(top_inds.shape[0])]
-				# print(top_k_preds)
-				# print(y)
-				# print()
 
 				correct_at = []
 				for j, y_j in enumerate(y.split()):
-					# print(top_k_preds[j], y_j)
 					temp = [l+1 for l in range(k_list[-1]) if top_k_preds[j][l] == y_j]
-					# print('temp', temp)
 					correct_at.append(temp[0] if temp != [] else 0)
-				# print(correct_at)
 				correct_at = max(correct_at) if min(correct_at) != 0 else 0
-				# print('correct_at', correct_at)
 
 				for k in k_list:
-					# num_correct = [y.split()[j] in top_k_preds[j][:k] for j in range(len(masked_index))]
-					# print(int(correct_at <= k and correct_at != 0))
 					correct[rel][k][X_type].append(int(correct_at <= k and correct_at != 0))
 
 				pred += [x, top_k_preds, correct_at]
@@ -586,8 +535,6 @@ class engine(object):
 			self.pred.append(pred)
 
 			if self.params.trial:
-				# print(pred)
-				# print()
 				if i == 8:
 					break
 		self.acc = {k1:{k2:{k3:np.mean(v3) if v3 != [] else 0 for k3, v3 in v2.items()} for k2, v2 in v1.items()} for k1, v1 in correct.items()}
@@ -596,9 +543,6 @@ class engine(object):
 			'X_trunc', 'y_trunc', 'correct_pos_trunc',
 			'X_shuf', 'y_shuf', 'correct_pos_shuf',
 			'X_shuf_trunc', 'y_shuf_trunc', 'correct_pos_shuf_trunc'])
-		# pd.set_option('display.max_columns', 1000)
-		# print(self.pred)
-		# logging.info(f'acc: {self.acc["Cause-Effect"][5]}')
 
 	def predict_feature(self, cv):
 		from sklearn.model_selection import cross_validate
@@ -630,7 +574,6 @@ class engine(object):
 					result_raw, _ = self.train(X, y)
 					for r in result_raw:
 						r.update({'relation': rel, 'y_type': y_name})
-					# print(result_raw)
 					result += result_raw
 
 				else: # original, should be merge into train()
@@ -649,23 +592,15 @@ class engine(object):
 							'precision', 'recall', 'roc_auc')
 					else:
 						scoring = ('accuracy', 'balanced_accuracy', 'f1_weighted', 
-							# 'roc_auc_ovr', 'roc_auc_ovo', 'roc_auc_ovr_weighted', 'roc_auc_ovo_weighted'
 							)
 					cv_results = cross_validate(clf, X, y, cv=cv, error_score='raise',
 						scoring=scoring) # error_score=np.nan
 					clf.fit(X, y)
 
-					# print(cv_results)
 					result_temp = {k:cv_results[f'test_{k}'].mean() for k in scoring}
 					result_temp.update({'relation': rel, 'y_type': y_name})
 					result.append(result_temp)
-				# break
-			# break
 		self.result = pd.DataFrame(result)
-		# to_move = ['relation', 'y_type']
-		# result = result[['relation', 'y_type'] + result.columns.tolist().remove(['relation', 'y_type'])]
-		
-		# utils.save_dt(result, index=False)
 
 	def train(self, embeddings, y, return_pred=False):
 		from sklearn.model_selection import cross_validate
@@ -684,10 +619,8 @@ class engine(object):
 		y = np.array(y)
 		assert X.shape[0] == len(y), f'X shape {X.shape} and y len {len(y)} not compatible'
 
-		# logging.info('start training...')
 		if self.params.use_pytorch:
 			# TODO default settings, should be add to argparse too
-			# self.classifier_config = config['classifier']
 			self.classifier_config = {'nhid': 0} # will use default settings in MLP?, nhid = 0 means logistic regression
 			self.featdim = X.shape[1]
 			self.nclasses = len(np.unique(y))
@@ -703,7 +636,6 @@ class engine(object):
 				X_train, X_test = X[train_index], X[test_index]
 				y_train, y_test = y[train_index], y[test_index]
 				X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=self.params.seed)
-				# print(X_train.shape, X_val.shape, X_test.shape)
 
 				# training
 				regs = [10**t for t in range(-5, -1)]
@@ -714,10 +646,8 @@ class engine(object):
 						seed=self.params.seed, cudaEfficient=self.cudaEfficient)
 					clf.fit(X_train, y_train, validation_data=(X_val, y_val))
 					scores.append(clf.score(X_val, y_val))
-				# logging.info([('reg:' + str(regs[idx]), scores[idx]) for idx in range(len(scores))])
 				optreg = regs[np.argmax(scores)]
 				devaccuracy = np.max(scores)
-				# logging.info('Validation : best param found is reg = {0} with score {1}'.format(optreg, devaccuracy))
 
 				# re train
 				clf = MLP(self.classifier_config, inputdim=self.featdim,
@@ -766,8 +696,6 @@ class engine(object):
 
 	def save_pred_mask(self):
 		lines_pred = ['\t'.join([str(x) for x in l]) + '\n' for l in self.pred]
-		# utils.save_dt(lines_pred, self.pred_datapath + '.txt')
-		# utils.save_dt(self.pred, self.pred_datapath + '.pkl')
 		utils.save_dt(self.pred, self.pred_datapath + '.csv')
 		utils.save_dt(self.pred, self.pred_datapath + '.pkl')
 
@@ -791,8 +719,6 @@ class engine(object):
 				hue_order=['X_orig', 'X_trunc', 'X_shuf', 'X_shuf_trunc'],
 				data=d[d.rel == rel], kind='bar',
 				palette='Set1')
-			# g.savefig(path + 'fig_' + rel + self.last_filename + '.png',
-			# 	dpi=600, bbox_inches='tight')
 
 			g.set_xticklabels(['1', '3', '5', '7', '9', '10', '20'])
 			g.set_ylabels('Accuracy')
@@ -801,8 +727,6 @@ class engine(object):
 			for t, l in zip(g._legend.texts, new_labels): t.set_text(l)
 
 			utils.save_dt(g, self.fig_datapath + f'_{rel}.png', dpi=600, bbox_inches='tight')
-
-		# logging.info('fig saved')
 
 	def plot_acc_f1(self, result_path):
 		d = utils.load_newest(result_path)
