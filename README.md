@@ -15,7 +15,7 @@ This code is written in python. The dependencies are:
 
 # Dataset
 
-The [SemEval](http://semeval2.fbk.eu/semeval2.php) #8 dataset is provided at `data/causal_probing/SemEval_2010_8/raw`. It can also be found at http://semeval2.fbk.eu/semeval2.php.
+The [SemEval](http://semeval2.fbk.eu/semeval2.php) #8 dataset is provided at `data/causal_probing/SemEval_2010_8/raw`. It can also be found [here](http://semeval2.fbk.eu/semeval2.php).
 
 # Basic Usage
 
