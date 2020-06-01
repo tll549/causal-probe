@@ -46,9 +46,10 @@ python main.py -probe mask
 For all probes,
 
 - `-reset_data 0` will skip the preprocessing, if a processed data is available.
-- `-reencode_data 0` will skip the encoding data for the first and third probe, if a temporary encoded pickle file is available.
 
 For the first and the second probe,
+
+- `-reencode_data 0` will skip the encoding data for the first and third probe, if a temporary encoded pickle file is available.
 
 - Without `-use_pytorch`, it will be run by sklearn LogisticRegression. 
 - `-model ALL` run the probing task for all four models. Can be `['bert', 'gpt2', 'glove', 'conceptnet']`
