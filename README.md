@@ -46,7 +46,7 @@ python main.py -probe mask
 For all probes,
 
 - `-reset_data 0` will skip the preprocessing, if a processed data is available.
-- `model_type base/large` controls whether to use BERT base or large.
+- `-model_type base/large` controls whether to use BERT base or large.
 
 For the first and the second probe,
 
