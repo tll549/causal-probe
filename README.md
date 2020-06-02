@@ -46,13 +46,14 @@ python main.py -probe mask
 For all probes,
 
 - `-reset_data 0` will skip the preprocessing, if a processed data is available.
+- `model_type base/large` controls whether to use BERT base or large.
 
 For the first and the second probe,
 
 - `-reencode_data 0` will skip the encoding data for the first and third probe, if a temporary encoded pickle file is available.
 
 - Without `-use_pytorch`, it will be run by sklearn LogisticRegression. 
-- `-model ALL` run the probing task for all four models. Can be `['bert', 'gpt2', 'glove', 'conceptnet']`
+- `-model ALL` run the probing task for all four models. Can be `['bert', 'gpt2', 'glove', 'conceptnet']`.
 - `-subset_data` controls whether performs downsampling or run on the full dataset.
 - `-cv` controls the number of folds for cross validation, the default is 5.
 - `-seed` specify the seed for all random states.
