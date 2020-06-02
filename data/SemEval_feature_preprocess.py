@@ -78,7 +78,6 @@ class DataLoader(object):
 			handled_punct = [re.sub(r'([.,!?;])', r' \1', x) for x in X]
 			return [[x2.lower() for x2 in x.split()] for x in handled_punct]
 		tok = tokenize(self.X)
-		# num_words = len(set([w for sent in tok for w in sent])) # can't use this, causes negative in prob causality diff because P(E|C) is counting by sentences, not by words
 		self.num_sent = len(self.X)
 
 		logging.info(f'calculating features...')
@@ -111,7 +110,6 @@ class DataLoader(object):
 			# causal power
 			q = delta_P / (1 - P_E_given_no_C)
 			if P_E_given_no_C == 0:
-				# print('000000')
 				p = 0
 			else:
 				p = -delta_P / P_E_given_no_C
@@ -121,8 +119,6 @@ class DataLoader(object):
 				c_count, e_count, c_e_count, e_no_c_count, causal_dependency,
 				P_of_E_given_C, P_of_E, probabilistic_causality, probabilistic_causality_diff,
 				delta_P, P_E_given_no_C, q, p, causal_power]
-			# if i > 10:
-			#     break 
 		logging.info(f'features calculated for {self.output.shape[0]} sentences')
 
 	def calc_prob_oanc(self, oanc_datapath, use_semeval_first=True, trial=False):
@@ -174,13 +170,6 @@ class DataLoader(object):
 					if f_i > 10:
 						break
 		logging.info(f'iterated through OANC, {self.num_sent} sentences')
-
-		# print(self.output.c_count.dtype, self.output.e_count.dtype, 
-		# 	  self.output.c_e_count.dype, self.output.e_no_c_count.dtype)
-		# self.output.c_count = self.output.c_count.astype(int)
-		# self.output.e_count = self.output.e_count.astype(int)
-		# self.output.c_e_count = self.output.c_e_count.astype(int)
-		# self.output.e_no_c_count = self.output.e_no_c_count.astype(int)
 
 		# causal dependency
 		self.output['causal_dependency'] = (self.output.c_count == self.output.c_e_count) & (self.output.e_no_c_count == 0)
@@ -267,8 +256,6 @@ class DataLoader(object):
 				except KeyError:
 					print(f'{c}, {rel} KeyError')
 				# assert self.output[c].nunique() <= num_classes, f'more than {num_classes} classes'
-		# remove incomplete cases caused from above
-		# self.output = self.output.dropna()
 
 	def save_output(self, data_path):
 		utils.save_dt(self.output, data_path, index=False)

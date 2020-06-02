@@ -22,8 +22,6 @@ class DataLoader(object):
                         if next_is_y:
                             self.y.append(line.split('\n')[0])
                             next_is_y = False
-                    # if len(self.y) >= 741:
-                    #     break
         logging.debug(f'loaded X len: {len(self.X)}')
 
     def preprocess(self, probing_task, mask='cause'):
@@ -70,19 +68,6 @@ class DataLoader(object):
 
         logging.info(f'processed len X: {len(self.X)}, causal: {sum([rel == "Cause-Effect" for rel in self.rel])}')
 
-    # def split(self, dev_prop=0.2, test_prop=0.2, seed=555):
-    #     random.seed(seed)
-    #     idx = list(range(len(self.X)))
-    #     random.shuffle(idx)
-    #     idx_1 = int(len(self.X) * (1-dev_prop-test_prop))
-    #     idx_2 = idx_1 + int(len(self.X) * dev_prop)
-
-    #     self.train_idx = idx[:idx_1]
-    #     self.dev_idx = idx[idx_1:idx_2]
-    #     self.test_idx = idx[idx_2:]
-    #     logging.debug(f'data splitted, train: {len(self.train_idx)}, dev: {len(self.dev_idx)}, test: {len(self.test_idx)}')
-    #     assert len(self.train_idx) + len(self.dev_idx) + len(self.test_idx) == len(self.X)
-
     def write(self, data_path):
         with open(data_path, 'w+') as f:
             for i in range(len(self.X)):
@@ -92,12 +77,8 @@ class DataLoader(object):
     def save_output(self, data_path):
         utils.save_dt(self.output, data_path, index=False)
 
-# logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
-
 # if __name__ == '__main__':
 #     # args = get_args()
-#     # print(args)
-
 #     dl = DataLoader()
 #     dl.read(args.raw_data_path)
 #     dl.preprocess()
