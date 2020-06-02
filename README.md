@@ -1,6 +1,6 @@
 # Causal Relations and Feature Extraction in Contextualized Sentence Representation
 
-Codes for the paper "Causal Relations and Feature Extraction in Contextualized Sentence Representation".
+Code for the paper "Causal Relations and Feature Extraction in Contextualized Sentence Representation".
 
 # Dependencies
 
