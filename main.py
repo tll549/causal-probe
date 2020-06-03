@@ -79,7 +79,7 @@ def get_args():
         help='bool')
     parser.add_argument('-swap_cause_effect', action='store_true',
         help='swap cause and effect, use for simple probe')
-    parser.add_argument('-subset_data', type=str, default='all',
+    parser.add_argument('-subset_data', type=str, default='downsampling',
         choices=['all', 'explicit', 'implicit', # for feature probe
             'downsampling', # for simple probe
             'explicit_down'], # for balancing explicit and implicit
