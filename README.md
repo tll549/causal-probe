@@ -52,7 +52,7 @@ For the first and the second probe,
 
 - `-reencode_data 0` will skip the encoding data for the first and third probe, if a temporary encoded pickle file is available.
 
-- Without `-use_pytorch`, it will be run by sklearn LogisticRegression. 
+- Without `-use_pytorch`, it will be run by sklearn `LogisticRegression`. 
 - `-model ALL` run the probing task for all four models. Can be `['bert', 'gpt2', 'glove', 'conceptnet']`.
 - `-subset_data` controls whether performs downsampling or run on the full dataset. Either "all" or "downsampling".
 - `-cv` controls the number of folds for cross validation, the default is 5.
@@ -70,7 +70,7 @@ The runtime for three tasks above are approximately,
 2. 50/230 minutes excluding/including preprocessing and encoding time
 3. 60/60 minutes excluding/including preprocessing and encoding time
 
-running by Intel Xeon CPU E5-2678 v3 2.50GHz, for example.
+running on aIntel Xeon CPU E5-2678 v3 2.50GHz, for example.
 
 
 
